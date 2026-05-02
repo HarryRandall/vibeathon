@@ -16,21 +16,45 @@ export async function GET() {
       return NextResponse.json({ courses: courses.map((course) => ({ ...course, importStatus: null })) });
     }
 
-    const ids = courses.map((course) => String(course.id));
-    const { data: imported } = await supabase
-      .from('courses')
-      .select('id, canvas_course_id, last_synced_at, course_files(id, status), course_weeks(id, week_number, title, position)')
-      .in('id', ids);
+    const stringIds = courses.map((course) => String(course.id));
+    const numericIds = courses.map((course) => course.id);
+    const courseSelect =
+      'id, canvas_course_id, last_synced_at, course_files(id, status), course_weeks(id, week_number, title, position)';
+
+    const [{ data: importedByPk }, { data: importedByCanvasId }] = await Promise.all([
+      supabase.from('courses').select(courseSelect).in('id', stringIds),
+      supabase.from('courses').select(courseSelect).in('canvas_course_id', numericIds),
+    ]);
+
+    const mergedByRowId = new Map<string, NonNullable<typeof importedByPk>[number]>();
+    for (const row of [...(importedByPk ?? []), ...(importedByCanvasId ?? [])]) {
+      mergedByRowId.set(String(row.id), row);
+    }
+
+    const locksIds = [
+      ...new Set([...stringIds, ...[...mergedByRowId.values()].map((row) => String(row.id))]),
+    ];
     const { data: locks } = await supabase
       .from('course_import_locks')
       .select('course_id, created_at')
-      .in('course_id', ids);
+      .in('course_id', locksIds);
 
-    const importedById = new Map((imported ?? []).map((course) => [String(course.id), course]));
+    const importedForCanvas = (canvasId: number) => {
+      const sid = String(canvasId);
+      return mergedByRowId.get(sid) ??
+        [...mergedByRowId.values()].find(
+          (row) =>
+            row.canvas_course_id !== null &&
+            row.canvas_course_id !== undefined &&
+            String(row.canvas_course_id) === sid,
+        );
+    };
     const locksByCourseId = new Map((locks ?? []).map((lock) => [String(lock.course_id), lock]));
     const decorated = courses.map((course) => {
-      const local = importedById.get(String(course.id));
-      const lock = locksByCourseId.get(String(course.id));
+      const local = importedForCanvas(course.id);
+      const lock =
+        locksByCourseId.get(String(course.id)) ??
+        (local ? locksByCourseId.get(String(local.id)) : undefined);
       const files = Array.isArray(local?.course_files) ? local.course_files : [];
       const weeks = Array.isArray(local?.course_weeks) ? local.course_weeks : [];
       const readyFiles = files.filter((file) => file.status === 'ready').length;

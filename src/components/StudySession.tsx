@@ -5,6 +5,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import {
+  MAX_QUIZ_HISTORY_PER_COURSE,
+  loadQuizSessions,
+  saveQuizSessions,
+  type StoredQuizAnswers,
+  type StoredQuizSession,
+} from "@/lib/study/quiz-history-storage";
+
 type DocSummary = {
   id: string;
   title: string;
@@ -61,6 +69,46 @@ type AnswerState = {
   error?: string;
 };
 
+function answersToStored(answers: Record<number, AnswerState>): StoredQuizAnswers {
+  const out: StoredQuizAnswers = {};
+  for (const [key, state] of Object.entries(answers)) {
+    out[key] = state;
+  }
+  return out;
+}
+
+function answersFromStored(stored: StoredQuizAnswers): Record<number, AnswerState> {
+  const out: Record<number, AnswerState> = {};
+  for (const [k, v] of Object.entries(stored)) {
+    const i = Number(k);
+    if (Number.isInteger(i)) out[i] = v;
+  }
+  return out;
+}
+
+function isQuizResponse(v: unknown): v is QuizResponse {
+  if (v === null || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  const quiz = o.quiz;
+  return (
+    typeof quiz === "object" &&
+    quiz !== null &&
+    Array.isArray((quiz as { questions?: unknown }).questions) &&
+    Array.isArray(o.sourceLabels)
+  );
+}
+
+function formatQuizAge(savedAt: number): string {
+  const sec = Math.floor((Date.now() - savedAt) / 1000);
+  if (sec < 60) return "just now";
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} min ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr} h ago`;
+  const days = Math.floor(hr / 24);
+  return `${days} d ago`;
+}
+
 const SUGGESTED_QUESTIONS = [
   "Give me a high-level summary of what this course covers so far.",
   "What are the key concepts I need to know for the next assessment?",
@@ -89,6 +137,7 @@ export function StudySession({
   const [input, setInput] = useState("");
   const [asking, setAsking] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const activeQuizSessionIdRef = useRef<string | null>(null);
 
   // Quiz state
   const [quizTopic, setQuizTopic] = useState("");
@@ -97,10 +146,37 @@ export function StudySession({
   const [quiz, setQuiz] = useState<QuizResponse | null>(null);
   const [answers, setAnswers] = useState<Record<number, AnswerState>>({});
   const [quizError, setQuizError] = useState<string | null>(null);
+  const [quizHistorySessions, setQuizHistorySessions] = useState<StoredQuizSession[]>([]);
+  const [activeQuizSessionId, setActiveQuizSessionId] = useState<string | null>(null);
+
+  activeQuizSessionIdRef.current = activeQuizSessionId;
+
+  useEffect(() => {
+    setQuizHistorySessions(loadQuizSessions(courseId));
+    setActiveQuizSessionId(null);
+    setQuiz(null);
+    setAnswers({});
+    setQuizError(null);
+    setQuizTopic("");
+  }, [courseId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (!quiz || activeQuizSessionId === null) return;
+    const id = activeQuizSessionId;
+    const storedAnswers = answersToStored(answers);
+    const timer = window.setTimeout(() => {
+      setQuizHistorySessions((prev) => {
+        const next = prev.map((s) => (s.id === id ? { ...s, answers: storedAnswers, savedAt: Date.now() } : s));
+        saveQuizSessions(courseId, next);
+        return next;
+      });
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [quiz, answers, activeQuizSessionId, courseId]);
 
   const askQuestion = useCallback(
     async (questionOverride?: string) => {
@@ -187,6 +263,7 @@ export function StudySession({
     setQuizError(null);
     setQuiz(null);
     setAnswers({});
+    setActiveQuizSessionId(null);
     try {
       const res = await fetch("/api/study/quiz", {
         method: "POST",
@@ -199,12 +276,58 @@ export function StudySession({
       }
       const data: QuizResponse = await res.json();
       setQuiz(data);
+      const sessionId = crypto.randomUUID();
+      const now = Date.now();
+      const topicTrim = quizTopic.trim();
+      const entry: StoredQuizSession = {
+        id: sessionId,
+        savedAt: now,
+        courseId,
+        requestedTopic: topicTrim,
+        requestedCount: quizCount,
+        payload: data,
+        answers: {},
+      };
+      setQuizHistorySessions((prev) => {
+        const next = [entry, ...prev].slice(0, MAX_QUIZ_HISTORY_PER_COURSE);
+        saveQuizSessions(courseId, next);
+        return next;
+      });
+      setActiveQuizSessionId(sessionId);
     } catch (err) {
       setQuizError(err instanceof Error ? err.message : String(err));
     } finally {
       setQuizLoading(false);
     }
   }, [quizTopic, quizCount, quizLoading, courseId]);
+
+  const resumeQuizSession = useCallback(
+    (sessionId: string) => {
+      const s = quizHistorySessions.find((x) => x.id === sessionId);
+      if (!s || !isQuizResponse(s.payload)) return;
+      setQuiz(s.payload);
+      setAnswers(answersFromStored(s.answers));
+      setQuizTopic(s.requestedTopic);
+      setQuizCount(s.requestedCount);
+      setQuizError(null);
+      setActiveQuizSessionId(sessionId);
+    },
+    [quizHistorySessions],
+  );
+
+  const removeQuizSession = useCallback((sessionId: string) => {
+    const clearCurrent = activeQuizSessionIdRef.current === sessionId;
+    setQuizHistorySessions((prev) => {
+      const next = prev.filter((s) => s.id !== sessionId);
+      saveQuizSessions(courseId, next);
+      return next;
+    });
+    if (clearCurrent) {
+      setQuiz(null);
+      setAnswers({});
+      setActiveQuizSessionId(null);
+    }
+  }, [courseId]);
 
   const pickOption = useCallback((i: number, optIdx: number) => {
     setAnswers((s) => {
@@ -330,6 +453,10 @@ export function StudySession({
           loading={quizLoading}
           error={quizError}
           answers={answers}
+          savedSessions={quizHistorySessions}
+          activeSessionId={activeQuizSessionId}
+          onResumeSession={resumeQuizSession}
+          onRemoveSession={removeQuizSession}
           onTopic={setQuizTopic}
           onCount={setQuizCount}
           onGenerate={generateQuiz}
@@ -513,6 +640,10 @@ function QuizPane({
   loading,
   error,
   answers,
+  savedSessions,
+  activeSessionId,
+  onResumeSession,
+  onRemoveSession,
   onTopic,
   onCount,
   onGenerate,
@@ -527,6 +658,10 @@ function QuizPane({
   loading: boolean;
   error: string | null;
   answers: Record<number, AnswerState>;
+  savedSessions: StoredQuizSession[];
+  activeSessionId: string | null;
+  onResumeSession: (id: string) => void;
+  onRemoveSession: (id: string) => void;
   onTopic: (v: string) => void;
   onCount: (v: number) => void;
   onGenerate: () => void;
@@ -535,6 +670,8 @@ function QuizPane({
   onSubmit: (i: number) => void;
   onAskFollowUp: (i: number) => void;
 }) {
+  const orderedSessions = [...savedSessions].sort((a, b) => b.savedAt - a.savedAt);
+
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-anu-border bg-white p-5">
@@ -574,6 +711,55 @@ function QuizPane({
           <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-800">{error}</p>
         )}
       </div>
+
+      {orderedSessions.length > 0 ? (
+        <div className="rounded-2xl border border-anu-border bg-white p-5">
+          <h3 className="text-[10px] font-semibold uppercase tracking-wide text-anu-gold">Recent quizzes</h3>
+          <p className="mt-1 text-xs text-zinc-600">
+            Saved on this browser. Open a row to reload questions and any answers you submitted.
+          </p>
+          <ul className="mt-3 divide-y divide-anu-border">
+            {orderedSessions.map((session) => {
+              const qc = isQuizResponse(session.payload) ? session.payload.quiz.questions.length : 0;
+              const topicLabel =
+                session.requestedTopic.trim() ||
+                (isQuizResponse(session.payload) ? session.payload.quiz.topic : "(quiz)");
+              const isOpen = activeSessionId === session.id;
+              return (
+                <li
+                  key={session.id}
+                  className={`flex flex-wrap items-center justify-between gap-2 py-3 first:pt-1 ${isOpen ? "bg-anu-paper/80 -mx-2 px-2 rounded-xl" : ""}`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-anu-ink">{topicLabel}</p>
+                    <p className="mt-0.5 text-[11px] text-zinc-500">
+                      {qc} question{qc === 1 ? "" : "s"} · {formatQuizAge(session.savedAt)}
+                      {isOpen ? <span className="font-medium text-anu-maroon"> · open</span> : null}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => onResumeSession(session.id)}
+                      className="rounded-full border border-anu-maroon bg-white px-3 py-1 text-xs font-semibold text-anu-maroon transition hover:bg-anu-maroon hover:text-white"
+                    >
+                      {isOpen ? "Focus" : "Open"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveSession(session.id)}
+                      className="rounded-full px-2 py-1 text-[11px] font-medium text-zinc-400 transition hover:text-red-700"
+                      aria-label={`Remove quiz: ${topicLabel}`}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
 
       {quiz && (
         <div className="space-y-4">

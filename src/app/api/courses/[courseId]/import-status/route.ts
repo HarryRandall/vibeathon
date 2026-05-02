@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { resolveSupabaseCourseId } from '@/lib/resolve-supabase-course-id';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 export const runtime = 'nodejs';
@@ -10,7 +11,9 @@ export async function GET(_req: Request, { params }: { params: { courseId: strin
     return NextResponse.json({ error: 'Backend not configured (set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY).' }, { status: 503 });
   }
 
-  const courseId = params.courseId;
+  const routeCourseId = params.courseId.trim();
+  const resolved = await resolveSupabaseCourseId(supabase, routeCourseId);
+  const courseId = resolved ?? routeCourseId;
   const [{ data: weeks, error: weeksError }, { data: files, error: filesError }] = await Promise.all([
     supabase
       .from('course_weeks')
@@ -32,7 +35,7 @@ export async function GET(_req: Request, { params }: { params: { courseId: strin
   const activeFile = fileRows.find((file) => file.status === 'processing' || file.status === 'pending') ?? fileRows[0] ?? null;
 
   return NextResponse.json({
-    courseId,
+    courseId: routeCourseId,
     weeks: weeks ?? [],
     files: fileRows,
     activeFile: activeFile
