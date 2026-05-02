@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ANU Course Study Assistant",
-  description: "Ask questions and generate practice quizzes grounded in your real Canvas course materials — lecture slides, module pages, assignment briefs.",
+  title: "Vibeathon",
+  description: "",
 };
 
 export default function RootLayout({
@@ -11,7 +11,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-anu-paper text-anu-ink antialiased">
+      <body className="min-h-screen antialiased">
         {children}
       </body>
     </html>
