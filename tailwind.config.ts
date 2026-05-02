@@ -15,6 +15,8 @@ const config: Config = {
       },
       fontFamily: {
         sans: [
+          "var(--font-lato)",
+          "Lato",
           "ui-sans-serif",
           "system-ui",
           "-apple-system",
