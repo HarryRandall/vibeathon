@@ -70,7 +70,18 @@ export async function ingestCourse(
   let processed = 0;
 
   for (const mod of modules) {
-    const items = mod.items ?? [];
+    // Canvas only inlines items when include[]=items is honoured server-side.
+    // For some course configs (locked modules, older API versions) the field is
+    // absent entirely — fall back to a separate items request in that case.
+    let items = mod.items;
+    if (items === undefined || items === null) {
+      try {
+        items = await client.getModuleItems(course.id, mod.id);
+      } catch (err) {
+        console.warn(`[ingest] could not fetch items for module ${mod.id} "${mod.name}":`, err);
+        items = [];
+      }
+    }
     for (const item of items) {
       processed += 1;
       setProgress({ itemsDone: processed, step: `processing ${item.type}: ${item.title}` });
@@ -249,12 +260,17 @@ export async function ingestCourse(
   }
 
   if (finalDocuments.length === 0) {
+    const skipReasons = skipped.map((s) => `${s.itemTitle}: ${s.reason}`).slice(0, 10).join("; ");
+    const detail = skipped.length
+      ? `${skipped.length} item(s) skipped — ${skipReasons}`
+      : "No module items were found (modules may be empty or access-restricted)";
+    const errMsg = `No materials could be indexed. ${detail}`;
     setProgress({
       status: "error",
-      error: "No materials could be indexed (all documents failed embedding). Check the server console for details.",
+      error: errMsg,
       finishedAt: new Date().toISOString(),
     });
-    throw new Error("No materials could be indexed.");
+    throw new Error(errMsg);
   }
 
   const corpus: CourseCorpus = {
