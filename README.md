@@ -1,19 +1,21 @@
 # Vibeathon
 
-A full-stack AI chat application built for the ANU Hackathon. Vibeathon features a clean, responsive interface with streaming AI responses and a robust backend powered by modern web technologies.
+A full-stack AI-empowered education platform built for the ANU Hackathon. Vibeathon reimagines the Canvas LMS experience by integrating intelligent study pipelines, AI assistants, and robust internal tooling. It features a modern shell UI that mirrors popular LMS systems while automatically generating study insights using OpenAI.
 
 ## Features
 
-- **Real-Time Streaming AI Chat**: Experience fast, chunk-by-chunk response streaming.
-- **Modern UI/UX**: Clean and responsive chat interface built with Tailwind CSS.
-- **Full-Stack Next.js**: Utilizes Next.js 14 App Router for both frontend and backend API capabilities.
-- **Backend Infrastructure**: Integrated with Supabase for data and state management.
+- **Intelligent Canvas Integration**: Seamlessly pulls from Canvas APIs, with built-in fallback to dummy data for development.
+- **AI Study Pipeline & Ingestion**: Automated ingestion of course materials with robust OpenAI connection handling (retries, timeouts, and error handling).
+- **Responsive LMS Shell UI**: Courses, calendar, inbox, and profile dashboard views built with Tailwind CSS.
+- **Real-Time Streaming Chat**: Integrated AI assistant to tutor students chunk-by-chunk.
+- **Robust Backend Infrastructure**: Next.js 14 App Router APIs paired with Supabase for data persistence and Vercel for fast deployments.
 
 ## Tech Stack
 
 - **Framework:** [Next.js 14](https://nextjs.org/) (React 18)
 - **Styling:** [Tailwind CSS](https://tailwindcss.com/)
 - **Database & Auth:** [Supabase](https://supabase.com/)
+- **AI Provider:** [OpenAI API](https://openai.com/)
 - **Language:** TypeScript
 
 ## Getting Started
@@ -29,7 +31,10 @@ Ensure you have Node.js (v18+) installed on your machine.
    npm install
    ```
 
-2. Set up environment variables locally (e.g., Supabase keys, AI API keys) in a `.env.local` file.
+2. Set up environment variables locally in a `.env.local` file. You will need:
+   - Supabase keys (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
+   - OpenAI API key (`OPENAI_API_KEY`)
+   - Canvas API credentials (if applicable)
 
 3. Run the development server:
    ```bash
@@ -50,6 +55,8 @@ This project includes a `vercel.json` configuration for seamless deployment.
 
 ## Project Structure
 
-- `src/app/page.tsx`: Main chat interface and React state management.
-- `src/app/api/chat/route.ts`: API endpoint for handling AI conversations and text streaming.
-- `src/lib/supabase/`: Supabase client configuration for server and client sides.
+- `src/app/courses/`, `calendar/`, `inbox/`: Canvas-like UI pages and routing.
+- `src/app/api/`: Backend endpoints, including AI chat and Canvas study data ingestion pipelines.
+- `src/lib/study/` & `src/lib/ai/`: Core logic for OpenAI study material processing and chat retries.
+- `src/lib/canvas/`: Canvas API integration and helper utilities.
+- `src/lib/supabase/`: Supabase client definitions for backend and frontend data fetching.
