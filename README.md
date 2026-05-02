@@ -38,6 +38,16 @@ Ensure you have Node.js (v18+) installed on your machine.
 
 4. Open [http://localhost:3000](http://localhost:3000) with your browser to interact with the app.
 
+## Deployment
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new). 
+This project includes a `vercel.json` configuration for seamless deployment.
+
+1. Push your code to a GitHub repository.
+2. Import the project into Vercel.
+3. Add your environment variables in the Vercel dashboard.
+4. Deploy!
+
 ## Project Structure
 
 - `src/app/page.tsx`: Main chat interface and React state management.
