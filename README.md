@@ -167,6 +167,19 @@ Open [http://localhost:3000](http://localhost:3000) for the dashboard, or [http:
 2. Try the Study Assistant.
 3. Watch the import pipeline at `/admin`.
 
+### Online testing
+
+For reviewers who do not want to run the project locally, use the hosted Vercel deployment:
+
+- Dashboard: [https://anuquiz.vercel.app](https://anuquiz.vercel.app)
+- Guided demo: [https://anuquiz.vercel.app/landing](https://anuquiz.vercel.app/landing)
+- Featured course: [https://anuquiz.vercel.app/courses/7624](https://anuquiz.vercel.app/courses/7624)
+- Study Assistant: [https://anuquiz.vercel.app/courses/7624/assistant](https://anuquiz.vercel.app/courses/7624/assistant)
+- Marks page: [https://anuquiz.vercel.app/courses/7624/grades](https://anuquiz.vercel.app/courses/7624/grades)
+- Import control room: [https://anuquiz.vercel.app/admin](https://anuquiz.vercel.app/admin)
+
+Use the online deployment for the fastest smoke test of the Canvas shell, course navigation, marks UI, Study Assistant, quiz flow, and admin import status screens. Use the local setup above when changing environment variables, testing Canvas/Supabase credentials, or debugging server-side import and processing behaviour.
+
 ## Deployment
 
 Deploy to Vercel in one click. The repo includes a `vercel.json` that configures the Next.js framework preset.
