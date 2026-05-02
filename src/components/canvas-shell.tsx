@@ -248,8 +248,10 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
             isCourseShell={isCourseShell}
             activeCourseId={activeCourseId}
             courseMenuOpen={courseMenuOpen}
+            globalNavCollapsed={globalNavCollapsed}
             globalTitle={globalTitle}
             onToggleCourseMenu={toggleCourseMenu}
+            onToggleGlobalNav={toggleGlobalNav}
           />
         )}
 

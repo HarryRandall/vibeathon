@@ -11,13 +11,6 @@ export default function HelpPage() {
           </p>
         </section>
         <section>
-          <h2 className="text-base font-semibold text-neutral-900">Study Assistant (demo)</h2>
-          <p className="mt-2">
-            Open <strong>Study Assistant</strong> from the course menu to ask questions once your materials are indexed from
-            Canvas or uploads.
-          </p>
-        </section>
-        <section>
           <h2 className="text-base font-semibold text-neutral-900">Need real support?</h2>
           <p className="mt-2">
             Contact your course convenor or ANU IT; this page is static demo copy only.

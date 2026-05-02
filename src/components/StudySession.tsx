@@ -10,7 +10,6 @@ type DocSummary = {
   title: string;
   kind: string;
   moduleName: string | null;
-  url: string;
   charCount: number;
   pageCount: number | null;
 };
@@ -78,12 +77,12 @@ export function StudySession({
   initialDocuments: DocSummary[];
   initialSkippedCount: number;
   /** Open the Practice quiz tab (e.g. from the course Quizzes menu). */
-  initialTab?: "ask" | "quiz";
+  initialTab?: "ask" | "quiz" | "materials";
 }) {
   const [documents, setDocuments] = useState<DocSummary[]>(initialDocuments);
   const [skippedCount, setSkippedCount] = useState(initialSkippedCount);
 
-  const [tab, setTab] = useState<"ask" | "quiz">(initialTab);
+  const [tab, setTab] = useState<"ask" | "quiz" | "materials">(initialTab);
 
   // Ask state
   const [messages, setMessages] = useState<Message[]>([]);
@@ -297,50 +296,51 @@ export function StudySession({
   );
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-      <div className="min-w-0">
-        <div className="mb-4 flex items-center gap-2 border-b border-anu-border">
-          <TabButton active={tab === "ask"} onClick={() => setTab("ask")}>
-            Ask
-          </TabButton>
-          <TabButton active={tab === "quiz"} onClick={() => setTab("quiz")}>
-            Practice quiz
-          </TabButton>
-        </div>
-
-        {tab === "ask" ? (
-          <AskPane
-            messages={messages}
-            input={input}
-            asking={asking}
-            onInput={setInput}
-            onSend={() => askQuestion()}
-            onSuggested={(q) => askQuestion(q)}
-            messagesEndRef={messagesEndRef}
-          />
-        ) : (
-          <QuizPane
-            topic={quizTopic}
-            count={quizCount}
-            quiz={quiz}
-            loading={quizLoading}
-            error={quizError}
-            answers={answers}
-            onTopic={setQuizTopic}
-            onCount={setQuizCount}
-            onGenerate={generateQuiz}
-            onPick={pickOption}
-            onText={setShortAnswerText}
-            onSubmit={submitAnswer}
-            onAskFollowUp={askFollowUp}
-          />
-        )}
+    <div className="min-w-0">
+      <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-anu-border">
+        <TabButton active={tab === "ask"} onClick={() => setTab("ask")}>
+          Ask
+        </TabButton>
+        <TabButton active={tab === "quiz"} onClick={() => setTab("quiz")}>
+          Practice quiz
+        </TabButton>
+        <TabButton active={tab === "materials"} onClick={() => setTab("materials")}>
+          Indexed materials
+          <span className="ml-2 text-xs font-normal text-zinc-500">
+            {documents.length} documents · {skippedCount} skipped
+          </span>
+        </TabButton>
       </div>
 
-      <SourcesSidebar
-        documents={documents}
-        skippedCount={skippedCount}
-      />
+      {tab === "ask" ? (
+        <AskPane
+          messages={messages}
+          input={input}
+          asking={asking}
+          onInput={setInput}
+          onSend={() => askQuestion()}
+          onSuggested={(q) => askQuestion(q)}
+          messagesEndRef={messagesEndRef}
+        />
+      ) : tab === "quiz" ? (
+        <QuizPane
+          topic={quizTopic}
+          count={quizCount}
+          quiz={quiz}
+          loading={quizLoading}
+          error={quizError}
+          answers={answers}
+          onTopic={setQuizTopic}
+          onCount={setQuizCount}
+          onGenerate={generateQuiz}
+          onPick={pickOption}
+          onText={setShortAnswerText}
+          onSubmit={submitAnswer}
+          onAskFollowUp={askFollowUp}
+        />
+      ) : (
+        <MaterialsPane documents={documents} skippedCount={skippedCount} />
+      )}
     </div>
   );
 }
@@ -759,7 +759,7 @@ function QuizCard({
   );
 }
 
-function SourcesSidebar({
+function MaterialsPane({
   documents,
   skippedCount,
 }: {
@@ -774,60 +774,42 @@ function SourcesSidebar({
     grouped.set(key, list);
   }
   return (
-    <aside className="space-y-4">
-      <div className="rounded-2xl border border-anu-border bg-white p-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
-          Indexed materials
-        </h3>
-        <p className="mt-1 text-xs text-zinc-500">
+    <section className="rounded-2xl border border-anu-border bg-white p-5">
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-anu-border pb-4">
+        <div>
+          <h3 className="text-sm font-semibold text-anu-ink">Indexed materials</h3>
+          <p className="mt-1 text-xs text-zinc-500">
+            Imported Canvas pages, files, and assignment briefs available to the study tools.
+          </p>
+        </div>
+        <p className="text-xs text-zinc-500">
           {documents.length} documents · {skippedCount} skipped
         </p>
-        <ul className="mt-3 max-h-[480px] space-y-3 overflow-y-auto pr-1">
+      </div>
+      <ul className="mt-4 max-h-[620px] space-y-4 overflow-y-auto pr-1">
           {[...grouped.entries()].map(([modName, docs]) => (
             <li key={modName}>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-anu-gold">
                 {modName}
               </p>
-              <ul className="mt-1 space-y-1">
+              <ul className="mt-2 space-y-2">
                 {docs.map((d) => (
-                  <li key={d.id} className="text-xs">
-                    <a
-                      href={d.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-anu-ink hover:text-anu-maroon hover:underline"
-                    >
+                  <li key={d.id} className="rounded-xl border border-anu-border bg-anu-paper px-3 py-2 text-xs text-anu-ink">
+                    <div className="flex flex-wrap items-start gap-2">
                       <span className="mr-1 rounded bg-anu-paper px-1 py-0.5 font-mono text-[9px] uppercase text-zinc-600">
                         {d.kind}
                       </span>
-                      {d.title}
-                    </a>
+                      <span className="min-w-0 flex-1 break-words">{d.title}</span>
+                      {d.pageCount ? (
+                        <span className="text-[11px] text-zinc-500">{d.pageCount} pages</span>
+                      ) : null}
+                    </div>
                   </li>
                 ))}
               </ul>
             </li>
           ))}
-        </ul>
-        <Link
-          href="/admin"
-          className="mt-3 block w-full rounded-full border border-anu-border bg-anu-paper px-3 py-1.5 text-center text-[11px] font-medium text-zinc-600 hover:border-anu-maroon hover:text-anu-maroon"
-        >
-          Manage imports in admin
-        </Link>
-      </div>
-
-      <div className="rounded-2xl border border-anu-border bg-anu-paper p-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
-          Honest limitations
-        </h3>
-        <ul className="mt-2 space-y-1.5 text-[11px] leading-relaxed text-zinc-700">
-          <li>· Indexes <code className="font-mono">.pdf</code> slides, Canvas pages, and assignment briefs only.</li>
-          <li>· Skips image-only PDFs (no extractable text), <code className="font-mono">.pptx</code>, <code className="font-mono">.docx</code>, <code className="font-mono">.zip</code>.</li>
-          <li>· The model only sees the top-matching chunks — long-context questions ("compare week 3 with week 7") may miss material.</li>
-          <li>· No spaced-repetition memory across sessions yet.</li>
-          <li>· Token-based auth for prototype only — production would use Canvas OAuth2.</li>
-        </ul>
-      </div>
-    </aside>
+      </ul>
+    </section>
   );
 }
