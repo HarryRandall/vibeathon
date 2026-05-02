@@ -17,7 +17,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "bad_request", message: "courseId required" }, { status: 400 });
     }
 
-    const client = getCanvasClientFromEnv();
+    let client;
+    try {
+      client = getCanvasClientFromEnv();
+    } catch (envErr) {
+      const msg = envErr instanceof Error ? envErr.message : String(envErr);
+      return NextResponse.json(
+        { error: "config", message: msg },
+        { status: 503 },
+      );
+    }
     const courses = await client.getActiveCourses();
     const course = courses.find((c) => c.id === courseId);
     if (!course) {

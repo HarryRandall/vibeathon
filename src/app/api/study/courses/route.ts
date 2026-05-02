@@ -8,7 +8,13 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const client = getCanvasClientFromEnv();
+    let client;
+    try {
+      client = getCanvasClientFromEnv();
+    } catch (envErr) {
+      const msg = envErr instanceof Error ? envErr.message : String(envErr);
+      return NextResponse.json({ error: "config", message: msg }, { status: 503 });
+    }
     const [profile, courses] = await Promise.all([
       client.getProfile(),
       client.getActiveCourses(),
