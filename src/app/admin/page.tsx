@@ -149,13 +149,14 @@ export default function AdminPage() {
   }, [selectedCourse?.id]);
 
   useEffect(() => {
-    if (!selectedCourse) return;
+    const hasActiveSync = importPhase === 'importing' || Boolean(selectedCourse?.importStatus?.processingFiles);
+    if (!selectedCourse || !hasActiveSync) return;
     const interval = window.setInterval(() => {
       setRefreshing(true);
       void Promise.all([loadCourses(true), loadDetails(selectedCourse.id, false)]).finally(() => setRefreshing(false));
-    }, selectedCourse.importStatus?.processingFiles ? 3000 : 8000);
+    }, 3000);
     return () => window.clearInterval(interval);
-  }, [selectedCourse?.id, selectedCourse?.importStatus?.processingFiles]);
+  }, [importPhase, selectedCourse?.id, selectedCourse?.importStatus?.processingFiles]);
 
   async function importCourse(allWeeks: boolean) {
     if (!selectedCourse) return;
@@ -217,6 +218,7 @@ export default function AdminPage() {
   const selectedWeekCount = selectedWeeks.size;
   const activeFile = details?.activeFile ?? null;
   const importBusy = importPhase === 'importing';
+  const hasActiveSync = importBusy || Boolean(selectedCourse?.importStatus?.processingFiles);
   const statusText = selectedCourse
     ? importBusy
       ? `Importing ${selectedCourse.course_code || selectedCourse.name}`
@@ -295,7 +297,9 @@ export default function AdminPage() {
                 <div className="admin-status-bar">
                   <div className="admin-status-bar__row">
                     <span className="admin-status-bar__label">{statusText}</span>
-                    <span className="admin-status-bar__meta">{refreshing || importBusy ? 'Refreshing...' : 'Live'}</span>
+                    <span className="admin-status-bar__meta">
+                      {refreshing ? 'Refreshing...' : hasActiveSync ? 'Live sync' : 'Idle'}
+                    </span>
                   </div>
                   <div className="admin-status-bar__track" aria-hidden="true">
                     <span className="admin-status-bar__fill" style={{ width: `${progressValue}%` }} />
@@ -336,7 +340,10 @@ export default function AdminPage() {
                 {weekOptions.length ? (
                   <div className="admin-week-list">
                     {weekOptions.map((week) => (
-                      <label key={week.id} className="admin-week-choice">
+                      <label
+                        key={week.id}
+                        className={`admin-week-choice ${selectedWeeks.has(week.week_number) ? 'admin-week-choice--selected' : ''}`}
+                      >
                         <input
                           type="checkbox"
                           checked={selectedWeeks.has(week.week_number)}
@@ -347,8 +354,11 @@ export default function AdminPage() {
                             setSelectedWeeks(next);
                           }}
                         />
-                        <span>{weekLabel(week.week_number, week.title)}</span>
-                        <small>Module {week.position ?? week.week_number}</small>
+                        <span className="admin-week-choice__check" aria-hidden="true" />
+                        <span className="admin-week-choice__body">
+                          <strong>{weekLabel(week.week_number, week.title)}</strong>
+                          <small>Module {week.position ?? week.week_number}</small>
+                        </span>
                       </label>
                     ))}
                   </div>
