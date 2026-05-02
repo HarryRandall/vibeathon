@@ -229,16 +229,43 @@ Deno.serve(async (req) => {
     }
 
     const baseUrl = Deno.env.get('SUPABASE_URL')!;
-    for (const fileId of newlyInserted) {
-      fetch(`${baseUrl}/functions/v1/process-file`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-        },
-        body: JSON.stringify({ fileId }),
-      }).catch(e => console.error('process-file dispatch failed', e));
-    }
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    // Run process-file for each newly inserted row. We use EdgeRuntime.waitUntil
+    // (Supabase / Deno Deploy) so the worker stays alive after we return the
+    // response, AND we cap concurrency so we don't overwhelm OpenAI.
+    const dispatch = (async () => {
+      const queue = [...newlyInserted];
+      const CONCURRENCY = 3;
+      async function worker() {
+        while (queue.length > 0) {
+          const fileId = queue.shift();
+          if (!fileId) return;
+          try {
+            const res = await fetch(`${baseUrl}/functions/v1/process-file`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${serviceKey}`,
+              },
+              body: JSON.stringify({ fileId }),
+            });
+            if (!res.ok) {
+              console.error(`process-file ${fileId} failed: ${res.status} ${await res.text()}`);
+            }
+          } catch (e) {
+            console.error('process-file dispatch failed', fileId, e);
+          }
+        }
+      }
+      await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+    })();
+
+    // EdgeRuntime is provided by Supabase Functions. Falls back to fire-and-forget
+    // in environments that don't expose it (which would still be wrong, but at
+    // least won't crash on undefined).
+    const er = (globalThis as unknown as { EdgeRuntime?: { waitUntil: (p: Promise<unknown>) => void } }).EdgeRuntime;
+    if (er?.waitUntil) er.waitUntil(dispatch);
 
     return Response.json({
       courseId: courseIdLocal,
@@ -246,6 +273,7 @@ Deno.serve(async (req) => {
       newFiles: newlyInserted.length,
       skippedExisting,
       failures,
+      note: 'Files are being processed asynchronously. Call /api/study/diag after a minute, or POST /api/study/process-pending to flush any stuck files.',
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
