@@ -275,10 +275,19 @@ export function StudySession({
         sources: [],
         pending: true,
       };
+      // Snapshot the conversation BEFORE this turn so we can rebuild the final
+      // messages array without relying on reading state from setMessages updaters
+      // (those run during React's rendering phase and aren't guaranteed sync).
+      const baseMessages: Message[] = messages;
       setMessages((m) => [...m, userMsg, assistantMsg]);
 
+      // Persist immediately so the chat appears in the history dropdown the
+      // moment the user hits send — they don't have to wait for the answer to
+      // finish streaming before seeing it saved.
+      persistChatSession([...baseMessages, userMsg]);
+
       const history: { role: "user" | "assistant"; content: string }[] = [];
-      for (const m of messages) {
+      for (const m of baseMessages) {
         if (m.role === "user") history.push({ role: "user", content: m.content });
         else if (m.role === "assistant" && !m.pending) history.push({ role: "assistant", content: m.content });
       }
@@ -317,26 +326,30 @@ export function StudySession({
             all.map((m) => (m.id === assistantId && m.role === "assistant" ? { ...m, content: acc } : m)),
           );
         }
-        let finalMessages: Message[] = [];
-        setMessages((all) => {
-          finalMessages = all.map((m) =>
-            m.id === assistantId && m.role === "assistant" ? { ...m, content: acc, sources, pending: false } : m,
-          );
-          return finalMessages;
-        });
-        persistChatSession(finalMessages);
+        const finalAssistantMsg: Message = {
+          id: assistantId,
+          role: "assistant",
+          content: acc,
+          sources,
+          pending: false,
+        };
+        setMessages((all) =>
+          all.map((m) => (m.id === assistantId && m.role === "assistant" ? finalAssistantMsg : m)),
+        );
+        persistChatSession([...baseMessages, userMsg, finalAssistantMsg]);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        let finalMessages: Message[] = [];
-        setMessages((all) => {
-          finalMessages = all.map((m) =>
-            m.id === assistantId && m.role === "assistant"
-              ? { ...m, content: `_Error: ${message}_`, pending: false }
-              : m,
-          );
-          return finalMessages;
-        });
-        persistChatSession(finalMessages);
+        const errorAssistantMsg: Message = {
+          id: assistantId,
+          role: "assistant",
+          content: `_Error: ${message}_`,
+          sources: [],
+          pending: false,
+        };
+        setMessages((all) =>
+          all.map((m) => (m.id === assistantId && m.role === "assistant" ? errorAssistantMsg : m)),
+        );
+        persistChatSession([...baseMessages, userMsg, errorAssistantMsg]);
       } finally {
         setAsking(false);
       }
