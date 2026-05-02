@@ -69,6 +69,14 @@ export function IconHelp({ className }: { className?: string }) {
   );
 }
 
+export function IconAdmin({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 64 64" aria-hidden>
+      <path d="M52 8H12a6 6 0 0 0-6 6v36a6 6 0 0 0 6 6h40a6 6 0 0 0 6-6V14a6 6 0 0 0-6-6ZM12 14h40v8H12v-8Zm0 36V28h40v22H12Zm7-16h12v4H19v-4Zm0 8h20v4H19v-4Zm23-8h6v12h-6V34Z" />
+    </svg>
+  );
+}
+
 export function IconNavToggle({ className }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} version="1.1" x="0" y="0" width="40" height="32" viewBox="0 0 40 32" aria-hidden>

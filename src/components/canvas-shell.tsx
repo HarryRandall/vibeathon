@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import {
+  IconAdmin,
   IconCalendar,
   IconCourses,
   IconDashboard,
@@ -15,6 +16,7 @@ import {
   IconNavToggle,
   IconStudio,
 } from '@/components/canvas/canvas-icons';
+import CanvasTopBar from '@/components/canvas/course-top-bar';
 import { courseHref, DASHBOARD_COURSES, FEATURE_COURSE_ID } from '@/lib/canvas-demo';
 import { buildCourseSectionTabs } from '@/lib/course-content';
 import { DEMO_GROUPS, DEMO_TODOS } from '@/lib/dummy-data';
@@ -40,7 +42,7 @@ function globalPageTitle(pathname: string): string {
   if (pathname.startsWith('/history')) return 'History';
   if (pathname.startsWith('/studio')) return 'Studio';
   if (pathname.startsWith('/help')) return 'Help';
-  if (pathname.startsWith('/admin')) return 'Admin upload';
+  if (pathname.startsWith('/admin')) return 'Admin import';
   return 'Page';
 }
 
@@ -58,6 +60,7 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
   }, []);
 
   const isDashboard = pathname === '/';
+  const isAdmin = pathname.startsWith('/admin');
   const activeCourseId = useMemo(() => {
     const m = pathname.match(/^\/courses\/([^/]+)/);
     return m?.[1] ?? null;
@@ -90,6 +93,7 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
   const navHistory = pathname.startsWith('/history');
   const navStudio = pathname.startsWith('/studio');
   const navHelp = pathname.startsWith('/help');
+  const navAdmin = isAdmin;
 
   const courseTodos = useMemo(
     () => DEMO_TODOS.filter((t) => t.courseCode === displayCourseCode || t.href.includes(`/courses/${activeCourseId}`)),
@@ -196,6 +200,14 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
                 <div className="menu-item__text">Studio</div>
               </Link>
             </li>
+            <li className={`menu-item ic-app-header__menu-list-item ${navAdmin ? 'ic-app-header__menu-list-item--active' : ''}`}>
+              <Link id="global_nav_admin_link" href="/admin" className="ic-app-header__menu-list-link" aria-current={navAdmin ? 'page' : undefined}>
+                <div className="menu-item-icon-container" aria-hidden>
+                  <IconAdmin className="ic-icon-svg menu-item__icon" />
+                </div>
+                <div className="menu-item__text">Admin</div>
+              </Link>
+            </li>
             <li className={`ic-app-header__menu-list-item ${navHelp ? 'ic-app-header__menu-list-item--active' : ''}`}>
               <Link id="global_nav_help_link" href="/help" className="ic-app-header__menu-list-link">
                 <div className="menu-item-icon-container" role="presentation">
@@ -213,7 +225,9 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
               <button
                 id="primaryNavToggle"
                 type="button"
-                className="ic-app-header__menu-list-link ic-app-header__menu-list-link--nav-toggle"
+                className={`ic-app-header__menu-list-link ic-app-header__menu-list-link--nav-toggle ${
+                  globalNavCollapsed ? 'ic-app-header__menu-list-link--nav-toggle-collapsed' : ''
+                }`}
                 aria-label={globalNavCollapsed ? 'Expand global navigation' : 'Minimise global navigation'}
                 title={globalNavCollapsed ? 'Expand global navigation' : 'Minimise global navigation'}
                 onClick={toggleGlobalNav}
@@ -229,52 +243,17 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
 
       <div id="wrapper" className="ic-Layout-wrapper">
         {!isDashboard && (
-          <div className="ic-app-nav-toggle-and-crumbs no-print">
-            {isCourseShell && (
-              <button
-                type="button"
-                id="courseMenuToggle"
-                className="ic-app-course-nav-toggle"
-                aria-live="polite"
-                aria-label={courseMenuOpen ? 'Hide Courses Navigation Menu' : 'Show Courses Navigation Menu'}
-                onClick={toggleCourseMenu}
-              >
-                <span className="icon-hamburger-bar" />
-                <span className="icon-hamburger-bar" />
-                <span className="icon-hamburger-bar" />
-              </button>
-            )}
-            {!isCourseShell && <span className="ic-app-nav-toggle-spacer" aria-hidden />}
-
-            <div className="ic-app-crumbs ic-app-crumbs-enhanced-rubrics">
-              <nav id="breadcrumbs" role="navigation" aria-label="breadcrumbs">
-                <ol>
-                  <li className="home">
-                    <Link href="/">
-                      <span className="ellipsible">
-                        <span className="screenreader-only">My Dashboard</span>
-                        <span aria-hidden>🏠</span>
-                      </span>
-                    </Link>
-                  </li>
-                  {isCourseShell ? (
-                    <li id="crumb_course_demo" aria-current="page">
-                      <Link href={activeCourseId ? `/courses/${activeCourseId}` : '/'}>
-                        <span className="ellipsible">{displayCourseCode}</span>
-                      </Link>
-                    </li>
-                  ) : (
-                    <li aria-current="page">
-                      <span className="ellipsible">{globalTitle}</span>
-                    </li>
-                  )}
-                </ol>
-              </nav>
-            </div>
-          </div>
+          <CanvasTopBar
+            pathname={pathname}
+            isCourseShell={isCourseShell}
+            activeCourseId={activeCourseId}
+            courseMenuOpen={courseMenuOpen}
+            globalTitle={globalTitle}
+            onToggleCourseMenu={toggleCourseMenu}
+          />
         )}
 
-        <div id="main" className={`ic-Layout-columns ${isDashboard ? 'ic-Layout-columns--dashboard' : ''}`}>
+        <div id="main" className={`ic-Layout-columns ${isDashboard ? 'ic-Layout-columns--dashboard' : ''} ${isAdmin ? 'ic-Layout-columns--admin' : ''}`}>
           <div className="ic-Layout-watermark" aria-hidden />
 
           {isCourseShell && (
@@ -320,93 +299,95 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
               </div>
             </div>
 
-            <div id="right-side-wrapper" className="ic-app-main-content__secondary">
-              <aside id="right-side" role="complementary">
-                {(isDashboard || isGlobalShell) && (
-                  <div className="ic-sidebar-todo-block">
-                    <h2 className="ic-sidebar-h2">To Do</h2>
-                    <ul className="ic-todo-list">
-                      {DEMO_TODOS.map((t) => (
-                        <li key={t.id} className="ic-todo-item">
-                          <Link href={t.href} className="ic-todo-link">
-                            <span className="ic-todo-course">{t.courseCode}</span>
-                            <span className="ic-todo-title">{t.title}</span>
-                            <span className="ic-todo-meta">
-                              {t.dueLabel} · {t.points} pts
-                            </span>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                    <p className="ic-sidebar-note">Demo data — connect Canvas API for live assignments.</p>
-                  </div>
-                )}
-
-                {isCourseShell && (
-                  <div id="course_show_secondary">
-                    <div className="course-options">
-                      <Link id="view_course_stream_btn" className="btn button-sidebar-wide" href={`/courses/${activeCourseId}/announcements`}>
-                        View Course Stream
-                      </Link>
-                    </div>
-                    <Link className="btn button-sidebar-wide" href="/calendar">
-                      View Course Calendar
-                    </Link>
-                    <Link id="view_course_notifications_btn" className="btn button-sidebar-wide" href={`/courses/${activeCourseId}/announcements`}>
-                      View Course Notifications
-                    </Link>
-
-                    <h2 className="ic-sidebar-h2">To Do</h2>
-                    <ul className="ic-todo-list">
-                      {sidebarTodos.map((t) => (
-                        <li key={t.id} className="ic-todo-item">
-                          <Link href={t.href} className="ic-todo-link">
-                            <span className="ic-todo-title">{t.title}</span>
-                            <span className="ic-todo-meta">{t.dueLabel}</span>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-
-                    <h2 className="ic-sidebar-h2">Course Groups</h2>
-                    <ul className="unstyled_list group_list">
-                      {DEMO_GROUPS.slice(0, 4).map((g) => (
-                        <li key={g.id}>
-                          <Link href={g.href}>{g.name}</Link>
-                        </li>
-                      ))}
-                    </ul>
-
-                    <div className="events_list recent_feedback">
-                      <div className="h2 shared-space">
-                        <h2>Recent Feedback</h2>
-                      </div>
-                      <ul className="right-side-list events">
-                        <li className="event">
-                          <Link href={`/courses/${FEATURE_COURSE_ID}/grades`} className="recent_feedback_icon">
-                            <i className="icon-check">✓</i>
-                            <div className="event-details">
-                              <b className="event-details__title recent_feedback_title">C-Lab-2 submission site</b>
-                              <p className="event-details__context">{displayCourseCode}</p>
-                              <p>
-                                <strong>90 out of 100</strong>
-                              </p>
-                              <p className="ic-feedback-snippet">
-                                Task1: excellent · Task2: shading discussion could be deeper · Task3: excellent…
-                              </p>
-                            </div>
-                          </Link>
-                        </li>
+            {!isAdmin && (
+              <div id="right-side-wrapper" className="ic-app-main-content__secondary">
+                <aside id="right-side" role="complementary">
+                  {(isDashboard || isGlobalShell) && (
+                    <div className="ic-sidebar-todo-block">
+                      <h2 className="ic-sidebar-h2">To Do</h2>
+                      <ul className="ic-todo-list">
+                        {DEMO_TODOS.map((t) => (
+                          <li key={t.id} className="ic-todo-item">
+                            <Link href={t.href} className="ic-todo-link">
+                              <span className="ic-todo-course">{t.courseCode}</span>
+                              <span className="ic-todo-title">{t.title}</span>
+                              <span className="ic-todo-meta">
+                                {t.dueLabel} · {t.points} pts
+                              </span>
+                            </Link>
+                          </li>
+                        ))}
                       </ul>
+                      <p className="ic-sidebar-note">Demo data — connect Canvas API for live assignments.</p>
                     </div>
+                  )}
 
-                    <p className="ic-demo-disclaimer">
-                      Demonstration shell — not affiliated with Instructure. Brand colours mirror ANU Canvas theme.
-                    </p>
-                  </div>
-                )}
-              </aside>
-            </div>
+                  {isCourseShell && (
+                    <div id="course_show_secondary">
+                      <div className="course-options">
+                        <Link id="view_course_stream_btn" className="btn button-sidebar-wide" href={`/courses/${activeCourseId}/announcements`}>
+                          View Course Stream
+                        </Link>
+                      </div>
+                      <Link className="btn button-sidebar-wide" href="/calendar">
+                        View Course Calendar
+                      </Link>
+                      <Link id="view_course_notifications_btn" className="btn button-sidebar-wide" href={`/courses/${activeCourseId}/announcements`}>
+                        View Course Notifications
+                      </Link>
+
+                      <h2 className="ic-sidebar-h2">To Do</h2>
+                      <ul className="ic-todo-list">
+                        {sidebarTodos.map((t) => (
+                          <li key={t.id} className="ic-todo-item">
+                            <Link href={t.href} className="ic-todo-link">
+                              <span className="ic-todo-title">{t.title}</span>
+                              <span className="ic-todo-meta">{t.dueLabel}</span>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+
+                      <h2 className="ic-sidebar-h2">Course Groups</h2>
+                      <ul className="unstyled_list group_list">
+                        {DEMO_GROUPS.slice(0, 4).map((g) => (
+                          <li key={g.id}>
+                            <Link href={g.href}>{g.name}</Link>
+                          </li>
+                        ))}
+                      </ul>
+
+                      <div className="events_list recent_feedback">
+                        <div className="h2 shared-space">
+                          <h2>Recent Feedback</h2>
+                        </div>
+                        <ul className="right-side-list events">
+                          <li className="event">
+                            <Link href={`/courses/${FEATURE_COURSE_ID}/grades`} className="recent_feedback_icon">
+                              <i className="icon-check">✓</i>
+                              <div className="event-details">
+                                <b className="event-details__title recent_feedback_title">C-Lab-2 submission site</b>
+                                <p className="event-details__context">{displayCourseCode}</p>
+                                <p>
+                                  <strong>90 out of 100</strong>
+                                </p>
+                                <p className="ic-feedback-snippet">
+                                  Task1: excellent · Task2: shading discussion could be deeper · Task3: excellent…
+                                </p>
+                              </div>
+                            </Link>
+                          </li>
+                        </ul>
+                      </div>
+
+                      <p className="ic-demo-disclaimer">
+                        Demonstration shell — not affiliated with Instructure. Brand colours mirror ANU Canvas theme.
+                      </p>
+                    </div>
+                  )}
+                </aside>
+              </div>
+            )}
           </div>
         </div>
 

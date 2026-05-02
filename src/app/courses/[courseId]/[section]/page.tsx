@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import CanvasModulesList from '@/components/canvas/modules-list';
 import { getCourseMeta, getAnnouncementsForCourse, getAssignmentsForCourse, getDiscussionsForCourse, getGradesForCourse, getPeopleForCourse } from '@/lib/dummy-data';
 import { COURSE_CONTENT_SECTIONS, type CourseContentSection, getCanvasModulesForCourse } from '@/lib/course-content';
 
@@ -28,125 +29,7 @@ export default function CourseSectionPage({ params }: { params: { courseId: stri
   switch (section as CourseContentSection) {
     case 'modules': {
       const modules = getCanvasModulesForCourse(courseId);
-      return (
-        <>
-          <h1 className="context-modules-title screenreader-only">Course Modules</h1>
-          <div className="header-bar">
-            <div className="header-bar-right header-bar__module-layout">
-              <div className="header-bar-right__buttons">
-                <button className="btn" id="expand_collapse_all" aria-expanded="false" data-expand="false" type="button">
-                  Collapse All
-                </button>
-                <button type="button" className="btn offline_web_export">
-                  Export Course Content
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="item-group-container" id="context_modules_sortable_container">
-            <div className="module-selector-container" />
-            <div id="context_modules" aria-label="Course Modules" className="ig-list">
-              {modules.map((module) => (
-                <div
-                  key={module.id}
-                  className="item-group-condensed context_module"
-                  aria-label={module.name}
-                  data-workflow-state="active"
-                  data-module-id={module.id}
-                  id={`context_module_${module.id}`}
-                >
-                  <a id={`module_${module.id}`} />
-                  <div className="ig-header header" id={module.id}>
-                    <h2 className="screenreader-only">{module.name}</h2>
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      className="ig-header-title collapse_module_link ellipsis"
-                      aria-controls={`context_module_content_${module.id}`}
-                      aria-expanded="true"
-                      aria-label={`${module.name} toggle module visibility`}
-                      title={module.name}
-                    >
-                      <i className="icon-mini-arrow-down" />
-                      <span className="name">{module.name}</span>
-                    </span>
-
-                    <div className="module_header_items">
-                      <div className="ig-header-admin">
-                        <div className="requirements_message" data-requirement-type="all" />
-                        <div className="completion_status">
-                          <i className={`icon-check complete_icon ${module.state === 'complete' ? 'is-visible' : ''}`} title="Completed">
-                            <span className="screenreader-only">Module Completed</span>
-                          </i>
-                          <i className={`icon-minimize in_progress_icon ${module.state === 'current' ? 'is-visible' : ''}`} title="In Progress">
-                            <span className="screenreader-only">Module In Progress</span>
-                          </i>
-                          <i className={`icon-lock locked_icon ${module.state === 'locked' ? 'is-visible' : ''}`} title="Locked">
-                            <span className="screenreader-only">Module Locked</span>
-                          </i>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="content" id={`context_module_content_${module.id}`}>
-                    <ul className="ig-list items context_module_items">
-                      {module.items.map((item) => (
-                        <li
-                          key={item.id}
-                          id={`context_module_item_${item.id}`}
-                          className={`context_module_item student-view ${item.type}${item.points ? ' also_assignment' : ''} indent_0`}
-                        >
-                          <div className="ig-row ig-published student-view no-estimated-duration">
-                            <span className="type_icon" title={item.typeLabel} role="none">
-                              <span className="screenreader-only">{item.typeLabel}</span>
-                              <span className="ig-type-icon" aria-hidden="true">
-                                <i className={item.iconClass} />
-                              </span>
-                            </span>
-
-                            <div className="ig-info">
-                              <div className="module-item-title">
-                                <span className="item_name">
-                                  <Link title={item.title} className="ig-title title item_link" href={item.href} aria-describedby={`module-item-${item.id}-details`}>
-                                    {item.title}
-                                  </Link>
-                                  <span className="points_possible" style={{ display: 'none' }}>
-                                    {item.points ?? '\u00a0'}
-                                  </span>
-                                </span>
-                              </div>
-
-                              <div className="module_item_icons nobr">
-                                <span className="type" style={{ display: 'none' }}>
-                                  {item.type}
-                                </span>
-                                <span className="id" style={{ display: 'none' }}>
-                                  {item.id}
-                                </span>
-                                <span className="graded" style={{ display: 'none' }}>
-                                  {item.points ? '1' : '0'}
-                                </span>
-                              </div>
-
-                              <div id={`module-item-${item.id}-details`} className="ig-details">
-                                <div className="due_date_display ig-details__item">{item.meta ?? ''}</div>
-                                {item.points ? <div className="points_possible_display ig-details__item">{item.points} pts</div> : null}
-                              </div>
-                            </div>
-                            <div className="module-item-status-icon" />
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </>
-      );
+      return <CanvasModulesList courseId={courseId} modules={modules} />;
     }
     case 'announcements':
       return wrap(

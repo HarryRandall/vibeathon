@@ -25,6 +25,10 @@ export function buildCourseSectionTabs(courseId: string) {
   }));
 }
 
+export function getCourseSectionLabel(section: string) {
+  return COURSE_NAV_ITEMS.find((item) => item.segments[0] === section)?.label ?? null;
+}
+
 type HomeLink = {
   text: string;
   href?: string;
