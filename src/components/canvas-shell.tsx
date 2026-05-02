@@ -140,7 +140,7 @@ function CanvasShellInner({ pathname, children }: { pathname: string; children: 
         <div role="region" className="ic-app-header__main-navigation" aria-label="Global Navigation">
           <div className="ic-app-header__logomark-container">
             <Link href="/" className="ic-app-header__logomark">
-              <span className="screenreader-only">Dashboard</span>
+              <span className="screenreader-only">Go to Dashboard home</span>
               <img src={ANU_HEADER_LOGO} alt="" width={120} height={40} />
             </Link>
           </div>

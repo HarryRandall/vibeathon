@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import { loadSyncedDashboardCourses } from '@/lib/dashboard-courses-server';
 
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardPage() {
   const { courses, error } = await loadSyncedDashboardCourses();
 
   return (
     <>
-      <h1 className="screenreader-only">Dashboard</h1>
       <div id="announcementWrapper" />
 
       {error ? (
@@ -18,7 +19,7 @@ export default async function DashboardPage() {
 
       <header className="ic-Dashboard-header">
         <div className="ic-Dashboard-header__title-row">
-          <h2 className="ic-Dashboard-header__title">Dashboard</h2>
+          <h1 className="ic-Dashboard-header__title">Dashboard</h1>
         </div>
       </header>
       <div id="DashboardCard_Container">

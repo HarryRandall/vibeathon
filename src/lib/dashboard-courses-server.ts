@@ -66,7 +66,11 @@ async function loadSyncedDashboardCoursesInner(): Promise<SyncedDashboardPayload
     const visible = raw.filter(isDashboardVisible);
     const supabase = getSupabaseAdmin();
     if (supabase) {
-      await syncCanvasCoursesCatalog(supabase, visible);
+      try {
+        await syncCanvasCoursesCatalog(supabase, visible);
+      } catch (syncErr) {
+        console.error('[dashboard-courses-server] catalog sync failed:', syncErr);
+      }
     }
     const courses = visible.map(canvasCourseToDashboardCard);
     return {
