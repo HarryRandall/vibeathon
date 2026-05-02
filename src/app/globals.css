@@ -56,6 +56,9 @@ body {
   background: var(--ic-brand-global-nav-bgd);
   color: #fff;
   overflow-y: auto;
+  /* Clip any horizontal overflow so icons/buttons can't bleed past the
+     84px rail boundary into the white content area. */
+  overflow-x: hidden;
   z-index: 100;
 }
 
@@ -178,12 +181,17 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Clip any oversized icon (e.g. nav toggle SVG with intrinsic width=40)
+     so it can't escape the 28px slot and visually collide with neighbours. */
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
 .ic-icon-svg {
   width: 26px;
   height: 26px;
   fill: #fff;
+  flex-shrink: 0;
 }
 
 .ic-app-header__menu-list-item--active .ic-icon-svg {
@@ -199,6 +207,9 @@ body {
 .ic-app-header__secondary-navigation {
   border-top: 1px solid rgba(255, 255, 255, 0.15);
   padding: 8px 0 12px;
+  /* Match the rail background so the divider above the nav toggle
+     stays inside the black rail and doesn't reveal the page below. */
+  background: var(--ic-brand-global-nav-bgd);
 }
 
 .ic-app-header__menu-list-link--nav-toggle .ic-icon-svg {
