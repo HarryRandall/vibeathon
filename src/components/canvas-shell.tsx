@@ -16,6 +16,7 @@ import {
   IconStudio,
 } from '@/components/canvas/canvas-icons';
 import { courseHref, DASHBOARD_COURSES, FEATURE_COURSE_ID } from '@/lib/canvas-demo';
+import { buildCourseSectionTabs } from '@/lib/course-content';
 import { DEMO_GROUPS, DEMO_TODOS } from '@/lib/dummy-data';
 
 const ANU_HEADER_LOGO =
@@ -24,26 +25,6 @@ const ANU_HEADER_LOGO =
 const CANVAS_AVATAR_PLACEHOLDER = 'https://canvas.anu.edu.au/images/messages/avatar-50.png';
 
 const TERM_LABEL = 'First Semester, 2026';
-
-type SectionTab = { label: string; href: string };
-
-function buildSectionTabs(courseId: string): SectionTab[] {
-  const h = (...segments: string[]) => courseHref(courseId, ...segments);
-  return [
-    { label: 'Home', href: h() },
-    { label: 'Modules', href: h('modules') },
-    { label: 'Announcements', href: h('announcements') },
-    { label: 'Discussions', href: h('discussions') },
-    { label: 'Study Assistant', href: h('assistant') },
-    { label: 'Class Recordings', href: h('recordings') },
-    { label: 'Readings', href: h('materials') },
-    { label: 'Assignments', href: h('assignments') },
-    { label: 'Marks', href: h('grades') },
-    { label: 'People', href: h('people') },
-    { label: 'Practice quizzes', href: h('quizzes') },
-    { label: 'Ed Discussion', href: h('ed-discussion') },
-  ];
-}
 
 function sectionTabActive(pathname: string, href: string) {
   const isCourseHome = /^\/courses\/[^/]+$/.test(href);
@@ -80,7 +61,7 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
   const isGlobalShell = !isDashboard && !isCourseShell;
 
   const sectionTabs = useMemo(
-    () => (activeCourseId ? buildSectionTabs(activeCourseId) : []),
+    () => (activeCourseId ? buildCourseSectionTabs(activeCourseId) : []),
     [activeCourseId],
   );
 
