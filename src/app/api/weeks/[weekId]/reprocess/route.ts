@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin, functionsUrl, serviceAuthHeader } from '@/lib/supabase-admin';
+import { functionsUrl, getSupabaseAdmin, serviceAuthHeader } from '@/lib/supabase-admin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /** Re-runs process-file for every file in the given week. Use when summaries look bad. */
 export async function POST(_req: NextRequest, { params }: { params: { weekId: string } }) {
+  const supabaseAdmin = getSupabaseAdmin();
+  if (!supabaseAdmin) {
+    return NextResponse.json({ error: 'Backend not configured (set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY).' }, { status: 503 });
+  }
+
   const { data: files, error } = await supabaseAdmin
     .from('course_files')
     .select('id')

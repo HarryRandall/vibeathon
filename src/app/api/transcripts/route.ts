@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin, functionsUrl, serviceAuthHeader } from '@/lib/supabase-admin';
+import { functionsUrl, getSupabaseAdmin, serviceAuthHeader } from '@/lib/supabase-admin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -8,6 +8,11 @@ const BUCKET = 'course-content';
 
 /** Manual transcript upload for a week. Accepts either { weekId, text, name? } or multipart with `file`. */
 export async function POST(req: NextRequest) {
+  const supabaseAdmin = getSupabaseAdmin();
+  if (!supabaseAdmin) {
+    return NextResponse.json({ error: 'Backend not configured (set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY).' }, { status: 503 });
+  }
+
   const ct = req.headers.get('content-type') ?? '';
   let weekId: string | null = null;
   let name = 'transcript.txt';
