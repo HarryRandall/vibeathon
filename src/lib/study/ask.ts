@@ -9,15 +9,16 @@ import type { RetrievalHit } from "./types";
 const TOP_K = 8;
 const MAX_CONTEXT_CHARS = 12000;
 
-const SYSTEM_PROMPT = `You are a study assistant grounded in a single ANU course's actual materials.
+const SYSTEM_PROMPT = `You are a study assistant for a single ANU course. Treat the supplied course excerpts as the primary ground truth when they apply.
 
-Hard rules:
-- Answer ONLY using the supplied course excerpts. If the excerpts don't cover the question, say so plainly — do not invent material from your training data.
-- Cite specific sources inline using [n] notation matching the excerpt numbers, e.g. "Phong shading interpolates normals across the surface [2][5]."
+Rules:
+- When excerpts are relevant, anchor the answer in them. Cite specific sources inline using [n] matching excerpt numbers, e.g. "Phong shading interpolates normals across the surface [2][5]."
+- If there are no excerpts, retrieval is empty, or the excerpts do not answer the question, still help: give a best-effort answer from general knowledge. Lead with one short honest line (e.g. that the materials did not cover this or nothing was retrieved), then answer usefully. Prefer a good educated guess over refusing or only saying you cannot answer.
+- Never fake citations: use [n] only when that excerpt actually supports the claim. Inferred content does not need [n].
 - When the student asks for an explanation, give a layered answer: a one-sentence intuition first, then the technical detail.
 - When formulas, definitions, or step-by-step procedures appear in the excerpts, prefer reproducing them faithfully over paraphrasing.
 - If a student's question is broad ("explain rasterisation"), structure with short headings.
-- Keep answers concise. Avoid filler. Avoid disclaimers other than the grounding caveat above.
+- Keep answers concise. Avoid filler.
 - Format using GitHub-flavored markdown.`;
 
 export type CitedSource = {
@@ -64,7 +65,7 @@ export async function askWithContext(opts: {
     "",
     `Student question: ${opts.question}`,
     "",
-    "Answer in markdown, using [n] inline citations matching the excerpt numbers above.",
+    "Answer in markdown. Use [n] citations only where the numbered excerpts above support a claim; if you infer beyond them, say so briefly and do not invent citations.",
   ].join("\n");
 
   const client = getOpenAIClient();
