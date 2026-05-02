@@ -26,6 +26,7 @@ type CanvasCourse = {
 
 type CourseWeeks = {
   courseId: string;
+  importStatus: ImportStatus;
   weeks: { id: string; week_number: number; title: string | null; position: number | null }[];
   files: { id: string; name: string; status: string; kind: string; week_id: string | null }[];
   activeFile?: { id: string; name: string; status: string; kind: string } | null;
@@ -66,6 +67,18 @@ const PHASE_LABEL: Record<ActivityPhase, string> = {
   ready: 'Ready',
   skipped: 'Skipped',
   failed: 'Failed',
+};
+
+const PHASE_PROGRESS: Record<ActivityPhase, number> = {
+  queued: 5,
+  downloading: 15,
+  saved: 25,
+  extracting: 45,
+  summarising: 65,
+  embedding: 80,
+  ready: 100,
+  skipped: 100,
+  failed: 100,
 };
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -124,6 +137,20 @@ export default function AdminPage() {
     () => courses.find((course) => course.id === selectedCourseId) ?? courses[0] ?? null,
     [courses, selectedCourseId],
   );
+  const selectedDetails = selectedCourse && details?.courseId === String(selectedCourse.id) ? details : null;
+  const selectedImportStatus = selectedDetails?.importStatus ?? selectedCourse?.importStatus ?? null;
+
+  function mergeCourseImportStatus(courseId: number, importStatus: ImportStatus) {
+    if (!importStatus) return;
+    const merge = (list: CanvasCourse[]) =>
+      list.map((course) => (course.id === courseId ? { ...course, importStatus } : course));
+
+    setCourses((prev) => {
+      const next = merge(prev);
+      if (coursesCache) coursesCache = { ...coursesCache, data: merge(coursesCache.data) };
+      return next;
+    });
+  }
 
   async function loadCourses(silent = false, force = false) {
     if (!force && coursesCache && isFresh(coursesCache.timestamp)) {
@@ -165,8 +192,9 @@ export default function AdminPage() {
       const next = { ...data, weeks: importedWeeks, files: importedFiles };
       detailsCache.set(courseId, { data: next, timestamp: Date.now() });
       setDetails(next);
+      mergeCourseImportStatus(courseId, next.importStatus);
     } catch (err) {
-      setDetails({ courseId: String(courseId), weeks: [], files: [] });
+      setDetails({ courseId: String(courseId), importStatus: null, weeks: [], files: [] });
       setMessage(err instanceof Error ? err.message : String(err));
     }
   }
@@ -179,20 +207,21 @@ export default function AdminPage() {
     if (selectedCourse) void loadDetails(selectedCourse.id);
   }, [selectedCourse?.id]);
 
-  // Fallback polling: only runs when the *server* says processing is still
-  // happening but the SSE stream isn't (e.g., page reloaded mid-import).
+  // Keep Supabase-derived counters fresh while imports/processors are active.
   useEffect(() => {
-    if (importPhase === 'importing') return;
+    if (!selectedCourse) return;
     const hasActiveSync =
-      Boolean(selectedCourse?.importStatus?.importing) ||
-      Boolean(selectedCourse?.importStatus?.processingFiles);
-    if (!selectedCourse || !hasActiveSync) return;
+      importPhase === 'importing' ||
+      Boolean(selectedImportStatus?.importing) ||
+      Boolean(selectedImportStatus?.processingFiles);
+    if (!hasActiveSync) return;
+    const intervalMs = importPhase === 'importing' ? 2000 : 5000;
     const interval = window.setInterval(() => {
       setRefreshing(true);
-      void Promise.all([loadCourses(true, true), loadDetails(selectedCourse.id, true)]).finally(() => setRefreshing(false));
-    }, 5000);
+      void loadDetails(selectedCourse.id, true).finally(() => setRefreshing(false));
+    }, intervalMs);
     return () => window.clearInterval(interval);
-  }, [importPhase, selectedCourse?.id, selectedCourse?.importStatus?.importing, selectedCourse?.importStatus?.processingFiles]);
+  }, [importPhase, selectedCourse?.id, selectedImportStatus?.importing, selectedImportStatus?.processingFiles]);
 
   function appendLog(line: string) {
     setImportLog((prev) => [...prev.slice(-200), `${new Date().toLocaleTimeString()}  ${line}`]);
@@ -404,30 +433,34 @@ export default function AdminPage() {
     setFile(null);
   }
 
-  const activeFile = details?.activeFile ?? null;
-  const importBusy = importPhase === 'importing' || Boolean(selectedCourse?.importStatus?.importing);
-  const hasActiveSync = importBusy || Boolean(selectedCourse?.importStatus?.processingFiles);
+  const activeFile = selectedDetails?.activeFile ?? null;
+  const importBusy = importPhase === 'importing' || Boolean(selectedImportStatus?.importing);
+  const hasActiveSync = importBusy || Boolean(selectedImportStatus?.processingFiles);
   const syncPillState = importBusy ? 'importing' : importPhase === 'error' ? 'error' : importPhase === 'success' ? 'success' : 'idle';
   const statusText = selectedCourse
     ? importBusy
-      ? selectedCourse.importStatus?.importing
+      ? selectedImportStatus?.importing
         ? `Scanning Canvas modules for ${selectedCourse.course_code || selectedCourse.name}`
         : `Importing ${selectedCourse.course_code || selectedCourse.name}`
       : activeFile?.status === 'processing'
         ? `Processing ${activeFile.name}`
-        : selectedCourse.importStatus?.processingFiles
-          ? `Processing ${selectedCourse.importStatus.processingFiles} source(s)`
+        : selectedImportStatus?.processingFiles
+          ? `Processing ${selectedImportStatus.processingFiles} source(s)`
           : activeFile?.status === 'pending'
             ? `Queued ${activeFile.name}`
-            : selectedCourse.importStatus?.readyFiles
-              ? `Ready: ${selectedCourse.importStatus.readyFiles} processed source(s)`
-              : selectedCourse.importStatus?.imported
+            : selectedImportStatus?.readyFiles
+              ? `Ready: ${selectedImportStatus.readyFiles} processed source(s)`
+              : selectedImportStatus?.imported
                 ? 'Imported, awaiting processing'
                 : 'Not imported yet'
     : 'Select a course';
-  const progressValue = selectedCourse?.importStatus?.filesCount
-    ? Math.min(100, Math.round((selectedCourse.importStatus.readyFiles / selectedCourse.importStatus.filesCount) * 100))
+  const liveProgressValue = importPhase === 'importing' && activity.length > 0
+    ? Math.round(activity.reduce((sum, row) => sum + PHASE_PROGRESS[row.phase], 0) / activity.length)
+    : null;
+  const savedProgressValue = selectedImportStatus?.filesCount
+    ? Math.min(100, Math.round((selectedImportStatus.readyFiles / selectedImportStatus.filesCount) * 100))
     : 0;
+  const progressValue = liveProgressValue ?? savedProgressValue;
 
   return (
     <div className="user_content admin-workbench">
@@ -437,7 +470,7 @@ export default function AdminPage() {
           <h1>Canvas content control room</h1>
           <p>Sync reusable course material once, then keep it ready for analysis and quiz generation.</p>
         </div>
-        {selectedCourse?.importStatus?.imported ? (
+        {selectedImportStatus?.imported ? (
           <Link className="Button" href={`/courses/${selectedCourse.id}/assistant`}>
             Open analysis
           </Link>
@@ -485,13 +518,13 @@ export default function AdminPage() {
                   <div>
                     <h2>{selectedCourse.course_code || selectedCourse.name}</h2>
                     <p>
-                      {selectedCourse.importStatus?.importing && selectedCourse.importStatus.importStartedAt
-                        ? `Import started ${formatDate(selectedCourse.importStatus.importStartedAt)}`
-                        : formatDate(selectedCourse.importStatus?.lastSyncedAt ?? null)}
+                      {selectedImportStatus?.importing && selectedImportStatus.importStartedAt
+                        ? `Import started ${formatDate(selectedImportStatus.importStartedAt)}`
+                        : formatDate(selectedImportStatus?.lastSyncedAt ?? null)}
                     </p>
                   </div>
                   <span className={`admin-sync-pill admin-sync-pill--${syncPillState}`}>
-                    {importBusy ? 'Importing' : statusCopy(selectedCourse.importStatus)}
+                    {importBusy ? 'Importing' : statusCopy(selectedImportStatus)}
                   </span>
                 </div>
 
@@ -504,10 +537,10 @@ export default function AdminPage() {
                     <span className="admin-status-bar__fill" style={{ width: `${progressValue}%` }} />
                   </div>
                   <div className="admin-status-bar__chips">
-                    <span>{selectedCourse.importStatus?.weeksCount ?? 0} weeks</span>
-                    <span>{selectedCourse.importStatus?.filesCount ?? 0} sources</span>
-                    <span>{selectedCourse.importStatus?.readyFiles ?? 0} ready</span>
-                    <span>{selectedCourse.importStatus?.failedFiles ?? 0} failed</span>
+                    <span>{selectedImportStatus?.weeksCount ?? 0} weeks</span>
+                    <span>{selectedImportStatus?.filesCount ?? 0} sources</span>
+                    <span>{selectedImportStatus?.readyFiles ?? 0} ready</span>
+                    <span>{selectedImportStatus?.failedFiles ?? 0} failed</span>
                   </div>
                 </div>
 
@@ -523,7 +556,7 @@ export default function AdminPage() {
 
                 <div className="admin-import-actions">
                   <button className="Button Button--primary" type="button" disabled={importBusy} onClick={() => importCourse()}>
-                    {importBusy ? 'Importing...' : selectedCourse.importStatus?.imported ? 'Sync all content' : 'Import all content'}
+                    {importBusy ? 'Importing...' : selectedImportStatus?.imported ? 'Sync all content' : 'Import all content'}
                   </button>
                 </div>
               </section>
