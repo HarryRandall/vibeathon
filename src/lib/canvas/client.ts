@@ -164,8 +164,8 @@ export class CanvasClient {
 }
 
 export function getCanvasClientFromEnv(): CanvasClient {
-  const baseUrl = process.env.CANVAS_BASE_URL;
-  const token = process.env.CANVAS_TOKEN;
+  const baseUrl = process.env.CANVAS_BASE_URL?.trim();
+  const token = process.env.CANVAS_TOKEN?.trim();
   if (!baseUrl) throw new Error("CANVAS_BASE_URL not set in environment");
   if (!token) throw new Error("CANVAS_TOKEN not set in environment");
   return new CanvasClient(baseUrl, token);

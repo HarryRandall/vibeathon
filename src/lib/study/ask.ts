@@ -1,6 +1,6 @@
 import "server-only";
 
-import OpenAI from "openai";
+import { getOpenAIClient, getOpenAIModelName } from "./openai-client";
 import { retrieveTopK } from "./retrieve";
 import { studyStore } from "./store";
 import type { RetrievalHit } from "./types";
@@ -42,9 +42,7 @@ export async function askWithContext(opts: {
   const corpus = studyStore.getCorpus(opts.courseId);
   if (!corpus) throw new Error("Course not ingested yet");
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("OPENAI_API_KEY not set");
-  const model = process.env.OPENAI_MODEL || "gpt-4o";
+  const model = getOpenAIModelName();
 
   const hits = await retrieveTopK(corpus, opts.question, TOP_K);
   const sources = trimSourcesToBudget(hits, MAX_CONTEXT_CHARS);
@@ -64,7 +62,7 @@ export async function askWithContext(opts: {
     "Answer in markdown, using [n] inline citations matching the excerpt numbers above.",
   ].join("\n");
 
-  const client = new OpenAI({ apiKey });
+  const client = getOpenAIClient();
   const completion = await client.chat.completions.create(
     {
       model,

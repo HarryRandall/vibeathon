@@ -1,7 +1,7 @@
 import "server-only";
 
-import OpenAI from "openai";
 import { z } from "zod";
+import { getOpenAIClient, getOpenAIModelName } from "./openai-client";
 import { zodToJsonSchema } from "@/lib/util/json-schema";
 import { retrieveTopK } from "./retrieve";
 import { studyStore } from "./store";
@@ -40,9 +40,7 @@ export async function gradeAnswer(opts: {
   const corpus = studyStore.getCorpus(opts.courseId);
   if (!corpus) throw new Error("Course not ingested yet");
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("OPENAI_API_KEY not set");
-  const model = process.env.OPENAI_MODEL || "gpt-4o";
+  const model = getOpenAIModelName();
 
   const hits = await retrieveTopK(corpus, opts.question, 5);
   const sources = hits.map((h, i) => ({
@@ -54,7 +52,7 @@ export async function gradeAnswer(opts: {
     .map((s) => `[${s.index}] (${s.title})\n${s.excerpt}`)
     .join("\n\n---\n\n");
 
-  const client = new OpenAI({ apiKey });
+  const client = getOpenAIClient();
   const jsonSchema = zodToJsonSchema(GradeSchema, "Grade");
 
   const completion = await client.chat.completions.create({

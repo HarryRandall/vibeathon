@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { CanvasError, getCanvasClientFromEnv } from "@/lib/canvas/client";
 import { ingestCourse } from "@/lib/study/ingest";
 import { studyStore } from "@/lib/study/store";
+import { formatErrorChain } from "@/lib/util/error-format";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,7 +56,10 @@ export async function POST(req: Request) {
       );
     }
     return NextResponse.json(
-      { error: "internal_error", message: err instanceof Error ? err.message : "Unknown error" },
+      {
+        error: "internal_error",
+        message: formatErrorChain(err),
+      },
       { status: 500 },
     );
   }
