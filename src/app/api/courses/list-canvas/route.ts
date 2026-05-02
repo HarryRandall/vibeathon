@@ -69,12 +69,16 @@ export async function GET() {
       const readyFiles = files.filter((file) => file.status === 'ready').length;
       const failedFiles = files.filter((file) => file.status === 'failed').length;
       const processingFiles = files.filter((file) => file.status === 'pending' || file.status === 'processing').length;
+      // Catalog sync upserts shell rows without running the import pipeline. Only treat as
+      // "imported" once the course has been synced (last_synced_at) or has weeks/files in DB.
+      const hasImportEvidence =
+        Boolean(local?.last_synced_at) || weeks.length > 0 || files.length > 0;
 
       return {
         ...course,
         importStatus: local
           ? {
-              imported: true,
+              imported: hasImportEvidence,
               lastSyncedAt: local.last_synced_at,
               weeksCount: weeks.length,
               filesCount: files.length,

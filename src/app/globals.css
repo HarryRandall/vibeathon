@@ -1392,6 +1392,33 @@ body {
   font-weight: 700;
 }
 
+/* Course has been through the import pipeline — settled, low-contrast; still selectable. */
+.admin-course-row--imported {
+  background: #2a2830;
+  border-color: #3d3a45;
+  color: #e8e4f0;
+  cursor: default;
+}
+
+.admin-course-row--imported:hover,
+.admin-course-row--imported.admin-course-row--active {
+  border-color: #5c5866;
+  background: #32303a;
+  transform: none;
+}
+
+.admin-course-row--imported strong {
+  color: #f2eff8;
+}
+
+.admin-course-row--imported small {
+  color: #a9a3b8;
+}
+
+.admin-course-row--imported em {
+  color: #9ae6b4;
+}
+
 .admin-import-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

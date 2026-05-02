@@ -27,7 +27,6 @@ type CanvasCourse = {
 type CourseWeeks = {
   courseId: string;
   weeks: { id: string; week_number: number; title: string | null; position: number | null }[];
-  supportingModules?: { id: string; title: string; position: number }[];
   files: { id: string; name: string; status: string; kind: string; week_id: string | null }[];
   activeFile?: { id: string; name: string; status: string; kind: string } | null;
 };
@@ -103,17 +102,10 @@ async function readJsonResponse<T>(res: Response): Promise<T & { error?: string;
   }
 }
 
-function weekLabel(weekNumber: number, title: string | null) {
-  if (!title) return `Week ${weekNumber}`;
-  if (/^week\s*\d+/i.test(title.trim())) return title;
-  return `Week ${weekNumber} - ${title}`;
-}
-
 export default function AdminPage() {
   const [courses, setCourses] = useState<CanvasCourse[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
   const [details, setDetails] = useState<CourseWeeks | null>(null);
-  const [selectedWeeks, setSelectedWeeks] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState('');
@@ -157,56 +149,25 @@ export default function AdminPage() {
     }
   }
 
-  async function loadDetails(courseId: number, resetSelection = true, force = false) {
+  async function loadDetails(courseId: number, force = false) {
     const cached = detailsCache.get(courseId);
     if (!force && cached && isFresh(cached.timestamp)) {
       setDetails(cached.data);
-      if (resetSelection) {
-        setSelectedWeeks(new Set(cached.data.weeks.map((week) => week.week_number)));
-      }
       return;
     }
-    if (resetSelection) {
-      setDetails(null);
-      setSelectedWeeks(new Set());
-    }
-
-    let importedWeeks: CourseWeeks['weeks'] = [];
-    let importedFiles: CourseWeeks['files'] = [];
 
     try {
       const res = await fetch(`/api/courses/${courseId}/import-status`, { cache: 'no-store' });
       const data = await readJsonResponse<CourseWeeks>(res);
-      if (!res.ok) throw new Error(data.error ?? 'Could not load imported weeks');
-      importedWeeks = data.weeks ?? [];
-      importedFiles = data.files ?? [];
+      if (!res.ok) throw new Error(data.error ?? 'Could not load import status');
+      const importedWeeks = data.weeks ?? [];
+      const importedFiles = data.files ?? [];
       const next = { ...data, weeks: importedWeeks, files: importedFiles };
       detailsCache.set(courseId, { data: next, timestamp: Date.now() });
       setDetails(next);
-      if (resetSelection) setSelectedWeeks(new Set(importedWeeks.map((week) => week.week_number)));
     } catch (err) {
       setDetails({ courseId: String(courseId), weeks: [], files: [] });
       setMessage(err instanceof Error ? err.message : String(err));
-    }
-
-    try {
-      if (importedWeeks.length) return;
-      const res = await fetch(`/api/courses/${courseId}/canvas-weeks`, { cache: 'no-store' });
-      const data = await readJsonResponse<CourseWeeks>(res);
-      if (!res.ok) throw new Error(data.error ?? 'Could not preview Canvas weeks');
-      const next = {
-        courseId: String(courseId),
-        files: importedFiles,
-        weeks: data.weeks ?? [],
-        supportingModules: data.supportingModules ?? [],
-      };
-      detailsCache.set(courseId, { data: next, timestamp: Date.now() });
-      setDetails(next);
-      if (resetSelection) {
-        setSelectedWeeks(new Set((data.weeks ?? []).map((week: CourseWeeks['weeks'][number]) => week.week_number)));
-      }
-    } catch {
-      // The imported status still works if Canvas module preview fails.
     }
   }
 
@@ -228,7 +189,7 @@ export default function AdminPage() {
     if (!selectedCourse || !hasActiveSync) return;
     const interval = window.setInterval(() => {
       setRefreshing(true);
-      void Promise.all([loadCourses(true, true), loadDetails(selectedCourse.id, false, true)]).finally(() => setRefreshing(false));
+      void Promise.all([loadCourses(true, true), loadDetails(selectedCourse.id, true)]).finally(() => setRefreshing(false));
     }, 5000);
     return () => window.clearInterval(interval);
   }, [importPhase, selectedCourse?.id, selectedCourse?.importStatus?.importing, selectedCourse?.importStatus?.processingFiles]);
@@ -251,7 +212,7 @@ export default function AdminPage() {
     });
   }
 
-  async function importCourse(allWeeks: boolean) {
+  async function importCourse() {
     if (!selectedCourse) return;
     setError('');
     setMessage('');
@@ -281,7 +242,6 @@ export default function AdminPage() {
         body: JSON.stringify({
           canvasCourseId: selectedCourse.id,
           localCourseId: String(selectedCourse.id),
-          weekNumbers: allWeeks ? undefined : Array.from(selectedWeeks),
         }),
         signal: controller.signal,
       });
@@ -407,7 +367,7 @@ export default function AdminPage() {
       coursesCache = null;
       detailsCache.delete(selectedCourse.id);
       await loadCourses(false, true);
-      await loadDetails(selectedCourse.id, false, true);
+      await loadDetails(selectedCourse.id, true);
     } catch (err) {
       if ((err as { name?: string })?.name === 'AbortError') {
         setImportPhase('idle');
@@ -444,24 +404,6 @@ export default function AdminPage() {
     setFile(null);
   }
 
-  const weekOptions = details?.weeks ?? [];
-  const supportingModules = details?.supportingModules ?? [];
-  const sourcesByWeek = useMemo(() => {
-    if (!details) return [] as { key: string; label: string; sortKey: number; files: CourseWeeks['files'] }[];
-    const weekMap = new Map(details.weeks.map((w) => [w.id, w]));
-    const groups = new Map<string, { key: string; label: string; sortKey: number; files: CourseWeeks['files'] }>();
-    for (const file of details.files) {
-      const week = file.week_id ? weekMap.get(file.week_id) : null;
-      const key = week?.id ?? 'unassigned';
-      const label = week ? weekLabel(week.week_number, week.title) : 'Unassigned';
-      const sortKey = week?.week_number ?? Number.MAX_SAFE_INTEGER;
-      const existing = groups.get(key);
-      if (existing) existing.files.push(file);
-      else groups.set(key, { key, label, sortKey, files: [file] });
-    }
-    return Array.from(groups.values()).sort((a, b) => a.sortKey - b.sortKey);
-  }, [details]);
-  const selectedWeekCount = selectedWeeks.size;
   const activeFile = details?.activeFile ?? null;
   const importBusy = importPhase === 'importing' || Boolean(selectedCourse?.importStatus?.importing);
   const hasActiveSync = importBusy || Boolean(selectedCourse?.importStatus?.processingFiles);
@@ -512,11 +454,16 @@ export default function AdminPage() {
             <p>{loading ? 'Loading courses from Canvas...' : `${courses.length} active course(s)`}</p>
           </div>
           <div className="admin-course-list">
-            {courses.map((course) => (
+            {courses.map((course) => {
+              const importIdle =
+                Boolean(course.importStatus?.imported) &&
+                !course.importStatus?.importing &&
+                !course.importStatus?.processingFiles;
+              return (
               <button
                 key={course.id}
                 type="button"
-                className={`admin-course-row ${selectedCourse?.id === course.id ? 'admin-course-row--active' : ''}`}
+                className={`admin-course-row ${selectedCourse?.id === course.id ? 'admin-course-row--active' : ''} ${importIdle ? 'admin-course-row--imported' : ''}`}
                 onClick={() => setSelectedCourseId(course.id)}
               >
                 <span>
@@ -525,7 +472,8 @@ export default function AdminPage() {
                 </span>
                 <em>{statusCopy(course.importStatus)}</em>
               </button>
-            ))}
+              );
+            })}
           </div>
         </section>
 
@@ -574,73 +522,10 @@ export default function AdminPage() {
                 ) : null}
 
                 <div className="admin-import-actions">
-                  <button className="Button Button--primary" type="button" disabled={importBusy} onClick={() => importCourse(true)}>
+                  <button className="Button Button--primary" type="button" disabled={importBusy} onClick={() => importCourse()}>
                     {importBusy ? 'Importing...' : selectedCourse.importStatus?.imported ? 'Sync all content' : 'Import all content'}
                   </button>
-                  <button
-                    className="Button"
-                    type="button"
-                    disabled={importBusy || selectedWeekCount === 0}
-                    onClick={() => importCourse(false)}
-                  >
-                    Import {selectedWeekCount} selected week{selectedWeekCount === 1 ? '' : 's'}
-                  </button>
                 </div>
-              </section>
-
-              <section className="admin-panel admin-panel--modules">
-                <div className="admin-panel__header admin-panel__header--split">
-                  <div>
-                    <h2>Import plan</h2>
-                    <p>Numbered teaching weeks are selectable. Supporting modules sync with full-course imports.</p>
-                  </div>
-                  <button className="admin-link-button" type="button" onClick={() => setSelectedWeeks(new Set(weekOptions.map((week) => week.week_number)))}>
-                    Select all
-                  </button>
-                </div>
-
-                {weekOptions.length ? (
-                  <div className="admin-week-list">
-                    {weekOptions.map((week) => (
-                      <label
-                        key={week.id}
-                        className={`admin-week-choice ${selectedWeeks.has(week.week_number) ? 'admin-week-choice--selected' : ''}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedWeeks.has(week.week_number)}
-                          onChange={(event) => {
-                            const next = new Set(selectedWeeks);
-                            if (event.target.checked) next.add(week.week_number);
-                            else next.delete(week.week_number);
-                            setSelectedWeeks(next);
-                          }}
-                        />
-                        <span className="admin-week-choice__check" aria-hidden="true" />
-                        <span className="admin-week-choice__body">
-                          <strong>{weekLabel(week.week_number, week.title)}</strong>
-                          <small>Module {week.position ?? week.week_number}</small>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="admin-empty-note">No numbered weeks were found in Canvas for this course.</p>
-                )}
-
-                {supportingModules.length ? (
-                  <div className="admin-supporting-modules">
-                    <h4>Supporting modules</h4>
-                    <ul>
-                      {supportingModules.map((module) => (
-                        <li key={module.id}>
-                          <span>{module.title}</span>
-                          <small>Module {module.position}</small>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
               </section>
 
               {(activity.length > 0 || importLog.length > 0) ? (
@@ -691,39 +576,6 @@ export default function AdminPage() {
                   ) : null}
                 </section>
               ) : null}
-
-              <section className="admin-panel admin-panel--activity">
-                <div className="admin-panel__header">
-                  <h2>Source activity</h2>
-                  <p>
-                    {details?.files.length
-                      ? `${details.files.length} imported source(s) grouped by week.`
-                      : 'No imported sources yet.'}
-                  </p>
-                </div>
-                {sourcesByWeek.length ? (
-                  <div className="admin-source-groups">
-                    {sourcesByWeek.map((group) => (
-                      <div key={group.key} className="admin-source-group">
-                        <h4 className="admin-source-group__title">
-                          {group.label} <small>({group.files.length})</small>
-                        </h4>
-                        <div className="admin-source-list">
-                          {group.files.map((source) => (
-                            <div key={source.id} className="admin-source-row">
-                              <span>
-                                <strong>{source.name}</strong>
-                                <small>{source.kind}</small>
-                              </span>
-                              <em data-status={source.status}>{source.status}</em>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </section>
             </>
           ) : null}
         </main>
