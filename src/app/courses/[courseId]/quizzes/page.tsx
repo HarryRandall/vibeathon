@@ -31,7 +31,7 @@ export default function QuizzesPage() {
       </div>
 
       <div className="rounded-xl border border-anu-border bg-white p-6 shadow-sm md:p-8">
-        <p className="text-xs font-semibold uppercase tracking-wide text-anu-gold">Sample · COMP1100</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-anu-gold">Sample · COMP4610</p>
         <p className="mt-3 text-base font-medium leading-relaxed text-slate-900">{sampleQuestion.prompt}</p>
 
         <ul className="mt-6 space-y-3">

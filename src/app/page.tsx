@@ -1,132 +1,36 @@
 import Link from 'next/link';
+import { DASHBOARD_COURSES } from '@/lib/canvas-demo';
 
-/** Course home — wiki-style body aligned with canvas.anu.edu.au course pages (abbreviated). */
-export default function CourseHomePage() {
+export default function DashboardPage() {
   return (
-    <div className="user_content">
-      <div className="mb-6 rounded border border-dashed border-neutral-300 bg-neutral-50 px-4 py-8 text-center text-sm text-neutral-600">
-        Banner image placeholder (course hero loads here in Canvas).
+    <>
+      <h1 className="screenreader-only">Dashboard</h1>
+      <div id="announcementWrapper" />
+      <header className="ic-Dashboard-header">
+        <div className="ic-Dashboard-header__title-row">
+          <h2 className="ic-Dashboard-header__title">Dashboard</h2>
+        </div>
+      </header>
+      <div id="DashboardCard_Container">
+        <div className="ic-DashboardCard__box">
+          {DASHBOARD_COURSES.map((c) => (
+            <Link key={c.id} href={`/courses/${c.id}`} className="ic-DashboardCard">
+              <div
+                className="ic-DashboardCard__header"
+                style={{
+                  background: c.image ? `url(${c.image}) center/cover` : c.color ?? '#324A4D',
+                }}
+              />
+              <div className="ic-DashboardCard__content">
+                <p className="ic-DashboardCard__course-code">{c.courseCode}</p>
+                <h3 className="ic-DashboardCard__course-name">{c.shortName}</h3>
+                <p className="ic-DashboardCard__meta">{c.term}</p>
+                <p className="ic-DashboardCard__subtitle">{c.subtitle}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
       </div>
-
-      <h2>How to engage with this course</h2>
-      <ul style={{ listStyleType: 'disc' }}>
-        <li>
-          Read your <Link href="#">Class summary</Link> and the <Link href="#">Course contacts</Link>
-        </li>
-        <li>
-          Read <Link href="#">Course Outline</Link>.
-        </li>
-        <li>
-          Get familiar with the information in the <Link href="#">Course information</Link> module
-        </li>
-        <li>Check Announcements and Discussions regularly</li>
-        <li>
-          Engage with course content for each week or topic in the <Link href="#">Modules</Link>
-        </li>
-        <li>
-          Check your <Link href="#">Assessments</Link> regularly
-        </li>
-      </ul>
-
-      <h2>Class summary</h2>
-      <ul>
-        <li>
-          <Link href="https://programsandcourses.anu.edu.au/course/COMP4610" target="_blank" rel="noreferrer">
-            COMP4610
-          </Link>
-        </li>
-        <li>
-          <Link href="https://programsandcourses.anu.edu.au/course/COMP8610" target="_blank" rel="noreferrer">
-            COMP8610
-          </Link>
-        </li>
-      </ul>
-
-      <h2>Course schedule</h2>
-      <p style={{ fontSize: '12pt', color: '#000000', lineHeight: '25px' }}>
-        The following table gives you information and links to what you will be doing each week. Please note: The
-        content of each module might not be available until just before it is due to begin.
-      </p>
-
-      <table style={{ borderCollapse: 'collapse', width: '98%', borderColor: '#be830e' }} border={3}>
-        <caption>Course Schedule</caption>
-        <thead>
-          <tr style={{ textAlign: 'center', height: '28px' }}>
-            <th style={{ width: '15%', height: '28px' }} scope="col">
-              <strong>Week</strong>
-            </th>
-            <th style={{ width: '30%', height: '28px' }} scope="col">
-              <strong>Lecture</strong>
-            </th>
-            <th style={{ width: '26%', height: '28px' }} scope="col">
-              <strong>Activities &amp; Computer Labs</strong>
-            </th>
-            <th style={{ width: '29%', height: '28px' }} scope="col">
-              <strong>Assessment</strong>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr style={{ height: '29px' }}>
-            <td style={{ width: '15%', textAlign: 'center', height: '29px' }}>
-              <strong>1</strong>
-            </td>
-            <td>Course overview, math review, spatial transformation</td>
-            <td />
-            <td />
-          </tr>
-          <tr style={{ height: '29px' }}>
-            <td style={{ textAlign: 'center', height: '29px' }}>
-              <strong>2</strong>
-            </td>
-            <td>Rasterisation I</td>
-            <td>C-Lab-1 workshop; C-Lab-1 session A</td>
-            <td />
-          </tr>
-          <tr style={{ height: '29px' }}>
-            <td style={{ textAlign: 'center', height: '29px' }}>
-              <strong>3</strong>
-            </td>
-            <td>Rasterisation II</td>
-            <td>C-Lab-1 session B</td>
-            <td />
-          </tr>
-          <tr style={{ height: '29px' }}>
-            <td style={{ textAlign: 'center', height: '29px' }}>
-              <strong>4</strong>
-            </td>
-            <td>Rasterisation III</td>
-            <td>C-Lab-2 workshop; C-Lab-2 session A</td>
-            <td>C-Lab-1 report due</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <h2>Smart study assistant</h2>
-      <p>
-        Open the integrated tool from the course menu: <Link href="/assistant">Study Assistant</Link> — summaries,
-        Q&amp;A, <Link href="/materials">readings index</Link>, and <Link href="/quizzes">practice quizzes</Link> when
-        your materials are synced.
-      </p>
-
-      <h2>Academic integrity</h2>
-      <p style={{ textDecoration: 'underline', fontSize: '12pt' }}>
-        <Link
-          href="https://www.anu.edu.au/students/academic-skills/referencing-and-academic-integrity/academic-integrity-best-practice"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Click here to read about academic integrity best practice
-        </Link>
-      </p>
-
-      <p>
-        ANU provides{' '}
-        <Link href="https://www.anu.edu.au/students/health-safety-wellbeing" target="_blank" rel="noreferrer">
-          Health, Safety and Wellbeing services
-        </Link>{' '}
-        free of charge to students.
-      </p>
-    </div>
+    </>
   );
 }

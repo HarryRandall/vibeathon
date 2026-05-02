@@ -10,8 +10,8 @@ const lato = Lato({
 });
 
 export const metadata: Metadata = {
-  title: 'Computer Graphics',
-  description: 'Course workspace — smart study assistant demo.',
+  title: { default: 'Dashboard', template: '%s · Canvas demo' },
+  description: 'Dashboard and course workspace — smart study assistant demo.',
 };
 
 export default function RootLayout({

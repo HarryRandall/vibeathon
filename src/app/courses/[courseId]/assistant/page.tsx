@@ -5,9 +5,9 @@ import { useState } from 'react';
 type Message = { role: 'user' | 'assistant'; content: string };
 
 const mockSources = [
-  { title: 'Week 5 — Control flow (slides)', type: 'PDF', course: 'COMP1100' },
-  { title: 'Lab 4 transcript', type: 'Transcript', course: 'COMP1100' },
-  { title: 'Tutorial solutions (subset)', type: 'PDF', course: 'COMP1100' },
+  { title: 'Week 5 — Control flow (slides)', type: 'PDF', course: 'COMP4610' },
+  { title: 'Lab 4 transcript', type: 'Transcript', course: 'COMP4610' },
+  { title: 'Tutorial solutions (subset)', type: 'PDF', course: 'COMP4610' },
 ] as const;
 
 export default function AssistantPage() {

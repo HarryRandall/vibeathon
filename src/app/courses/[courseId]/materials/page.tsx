@@ -1,8 +1,8 @@
 const items = [
-  { name: 'Lecture 05 — iteration patterns.pdf', kind: 'Slides', course: 'COMP1100', status: 'Indexed' },
-  { name: 'Tutorial 03 — workshop sheet.pdf', kind: 'Tutorial', course: 'COMP1100', status: 'Indexed' },
-  { name: 'Week 5 lecture transcript.txt', kind: 'Transcript', course: 'COMP1100', status: 'Indexed' },
-  { name: 'Lab brief — sorting comparison.pdf', kind: 'Lab', course: 'COMP1100', status: 'Pending' },
+  { name: 'Lecture 05 — iteration patterns.pdf', kind: 'Slides', course: 'COMP4610', status: 'Indexed' },
+  { name: 'Tutorial 03 — workshop sheet.pdf', kind: 'Tutorial', course: 'COMP4610', status: 'Indexed' },
+  { name: 'Week 5 lecture transcript.txt', kind: 'Transcript', course: 'COMP4610', status: 'Indexed' },
+  { name: 'Lab brief — sorting comparison.pdf', kind: 'Lab', course: 'COMP4610', status: 'Pending' },
   { name: 'Topic overview — probability.pdf', kind: 'Slides', course: 'STAT1008', status: 'Pending' },
 ] as const;
 
