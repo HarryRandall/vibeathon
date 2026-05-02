@@ -5,6 +5,7 @@ import { getOpenAIClient, getOpenAIModelName } from "./openai-client";
 import { zodToJsonSchema } from "@/lib/util/json-schema";
 import { retrieveTopK } from "./retrieve";
 import { studyStore } from "./store";
+import { getImportedCourse, retrieveImportedSources } from "./supabase-rag";
 
 export const GradeSchema = z.object({
   correct: z.boolean().describe("True if the student's answer captures the essential meaning of the expected answer."),
@@ -38,16 +39,27 @@ export async function gradeAnswer(opts: {
   studentAnswer: string;
 }): Promise<{ result: GradeResult; modelUsed: string }> {
   const corpus = studyStore.getCorpus(opts.courseId);
-  if (!corpus) throw new Error("Course not ingested yet");
-
   const model = getOpenAIModelName();
 
-  const hits = await retrieveTopK(corpus, opts.question, 5);
-  const sources = hits.map((h, i) => ({
-    index: i + 1,
-    title: h.document.title,
-    excerpt: h.chunk.text,
-  }));
+  const sources = corpus
+    ? (await retrieveTopK(corpus, opts.question, 5)).map((h, i) => ({
+        index: i + 1,
+        title: h.document.title,
+        excerpt: h.chunk.text,
+      }))
+    : (await retrieveImportedSources(opts.courseId, opts.question, 5)).map((s) => ({
+        index: s.index,
+        title: s.documentTitle,
+        excerpt: s.excerpt,
+      }));
+
+  const importedCourse = corpus ? null : await getImportedCourse(opts.courseId);
+  if (!corpus && !importedCourse) throw new Error("Course not imported yet");
+
+  const courseLabel = corpus
+    ? `${corpus.courseCode} — ${corpus.courseName}`
+    : `${importedCourse?.course_code ?? opts.courseId} — ${importedCourse?.short_name ?? 'Imported course'}`;
+
   const contextBlock = sources
     .map((s) => `[${s.index}] (${s.title})\n${s.excerpt}`)
     .join("\n\n---\n\n");
@@ -63,7 +75,7 @@ export async function gradeAnswer(opts: {
       {
         role: "user",
         content: [
-          `Course: ${corpus.courseCode} — ${corpus.courseName}`,
+          `Course: ${courseLabel}`,
           "",
           "Excerpts retrieved from course materials:",
           contextBlock || "(no relevant excerpts retrieved)",

@@ -50,13 +50,50 @@ async function downloadBytes(path: string): Promise<Uint8Array> {
   return new Uint8Array(await data.arrayBuffer());
 }
 
-/** Recursively unpack a ZIP into child course_files rows. */
+// Allowlist of file extensions that contain useful course content.
+// Anything else (source code, build artefacts, images, 3D models, archives) is
+// dropped so retrieval isn't diluted by noise.
+const KEEP_EXTENSIONS = new Set([
+  '.pdf', '.txt', '.md', '.markdown', '.html', '.htm',
+  '.rtf', '.csv', '.tsv', '.srt', '.vtt',
+  '.doc', '.docx', '.ppt', '.pptx', '.odt', '.odp',
+]);
+
+function shouldKeepZipEntry(path: string): { keep: boolean; reason?: string } {
+  const baseName = path.split('/').pop() ?? path;
+  const lower = baseName.toLowerCase();
+
+  // macOS resource forks and metadata directories
+  if (path.includes('__MACOSX/') || baseName.startsWith('._') || baseName === '.DS_Store') {
+    return { keep: false, reason: 'macos metadata' };
+  }
+  if (baseName.startsWith('.')) {
+    return { keep: false, reason: 'dotfile' };
+  }
+  // Strip query params just in case
+  const cleanName = lower.split('?')[0];
+  const dot = cleanName.lastIndexOf('.');
+  if (dot === -1) return { keep: false, reason: 'no extension' };
+  const ext = cleanName.slice(dot);
+  if (!KEEP_EXTENSIONS.has(ext)) {
+    return { keep: false, reason: `extension ${ext} not in allowlist` };
+  }
+  return { keep: true };
+}
+
+/** Recursively unpack a ZIP into child course_files rows (junk files dropped). */
 async function unpackZip(parent: FileRow, bytes: Uint8Array) {
   const zip = await JSZip.loadAsync(bytes);
   const childIds: string[] = [];
+  let droppedCount = 0;
 
   for (const [path, entry] of Object.entries(zip.files)) {
     if (entry.dir) continue;
+    const decision = shouldKeepZipEntry(path);
+    if (!decision.keep) {
+      droppedCount++;
+      continue;
+    }
     const childBytes = await entry.async('uint8array');
     const baseName = path.split('/').pop()!;
     const storagePath = `${parent.course_id}/zip/${parent.id}/${path}`;
@@ -75,6 +112,9 @@ async function unpackZip(parent: FileRow, bytes: Uint8Array) {
     }).select('id').single();
 
     if (row) childIds.push(row.id);
+  }
+  if (droppedCount > 0) {
+    console.log(`unpackZip: kept ${childIds.length} children, dropped ${droppedCount} non-content entries`);
   }
 
   // Fire-and-forget process each child
