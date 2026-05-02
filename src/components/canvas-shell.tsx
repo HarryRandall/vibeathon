@@ -46,7 +46,6 @@ function globalPageTitle(pathname: string): string {
 }
 
 export default function CanvasShell({ children }: { children: ReactNode }) {
-  const { courses, featuredCourseId } = useDashboardCourses();
   const pathname = usePathname();
 
   // Routes that render full-bleed without the Canvas LMS chrome.
@@ -60,6 +59,7 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
 }
 
 function CanvasShellInner({ pathname, children }: { pathname: string; children: ReactNode }) {
+  const { courses, featuredCourseId } = useDashboardCourses();
   const [courseMenuOpen, setCourseMenuOpen] = useState(true);
   const [globalNavCollapsed, setGlobalNavCollapsed] = useState(false);
 
