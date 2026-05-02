@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -69,27 +70,18 @@ const SUGGESTED_QUESTIONS = [
 
 export function StudySession({
   courseId,
-  courseCode,
-  initiallyIngested,
   initialDocuments,
   initialSkippedCount,
   initialTab = "ask",
 }: {
   courseId: number;
-  courseCode: string;
-  initiallyIngested: boolean;
   initialDocuments: DocSummary[];
   initialSkippedCount: number;
   /** Open the Practice quiz tab (e.g. from the course Quizzes menu). */
   initialTab?: "ask" | "quiz";
 }) {
-  const [ingested, setIngested] = useState(initiallyIngested);
   const [documents, setDocuments] = useState<DocSummary[]>(initialDocuments);
   const [skippedCount, setSkippedCount] = useState(initialSkippedCount);
-  const [ingestStatus, setIngestStatus] = useState<string>(initiallyIngested ? "ready" : "idle");
-  const [ingestStep, setIngestStep] = useState<string>("");
-  const [ingestProgress, setIngestProgress] = useState<{ done: number; total: number } | null>(null);
-  const [ingestError, setIngestError] = useState<string | null>(null);
 
   const [tab, setTab] = useState<"ask" | "quiz">(initialTab);
 
@@ -110,56 +102,6 @@ export function StudySession({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  // Poll progress when ingestion is running
-  useEffect(() => {
-    if (ingestStatus !== "running") return;
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/study/ingest?courseId=${courseId}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        setIngestStep(data.step ?? "");
-        if (typeof data.itemsDone === "number" && typeof data.itemsTotal === "number") {
-          setIngestProgress({ done: data.itemsDone, total: data.itemsTotal });
-        }
-        if (data.status === "ready") {
-          setIngestStatus("ready");
-        } else if (data.status === "error") {
-          setIngestStatus("error");
-          setIngestError(data.error ?? "Unknown ingestion error");
-        }
-      } catch {
-        // tolerate transient network errors during polling
-      }
-    }, 1500);
-    return () => clearInterval(interval);
-  }, [ingestStatus, courseId]);
-
-  const startIngest = useCallback(async () => {
-    setIngestStatus("running");
-    setIngestStep("starting");
-    setIngestError(null);
-    try {
-      const res = await fetch("/api/courses/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ canvasCourseId: courseId, localCourseId: String(courseId) }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message ?? `Ingest failed (HTTP ${res.status})`);
-      }
-      await res.json().catch(() => ({}));
-      setIngested(true);
-      setIngestStatus("ready");
-      setSkippedCount(0);
-      window.location.reload();
-    } catch (err) {
-      setIngestStatus("error");
-      setIngestError(err instanceof Error ? err.message : String(err));
-    }
-  }, [courseId]);
 
   const askQuestion = useCallback(
     async (questionOverride?: string) => {
@@ -354,19 +296,6 @@ export function StudySession({
     [quiz, answers],
   );
 
-  if (!ingested) {
-    return (
-      <IngestPanel
-        courseCode={courseCode}
-        status={ingestStatus}
-        step={ingestStep}
-        progress={ingestProgress}
-        error={ingestError}
-        onStart={startIngest}
-      />
-    );
-  }
-
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
       <div className="min-w-0">
@@ -411,85 +340,8 @@ export function StudySession({
       <SourcesSidebar
         documents={documents}
         skippedCount={skippedCount}
-        onReingest={() => {
-          if (confirm("Re-fetch all course materials? This will replace the current index.")) {
-            setIngested(false);
-            startIngest();
-          }
-        }}
       />
     </div>
-  );
-}
-
-function IngestPanel({
-  courseCode,
-  status,
-  step,
-  progress,
-  error,
-  onStart,
-}: {
-  courseCode: string;
-  status: string;
-  step: string;
-  progress: { done: number; total: number } | null;
-  error: string | null;
-  onStart: () => void;
-}) {
-  const pct = progress && progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
-  return (
-    <section className="rounded-2xl border border-anu-border bg-white p-6 shadow-sm md:p-8">
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-anu-gold">Step 1</p>
-      <h3 className="mt-1 text-2xl font-semibold text-anu-ink">Load this course's materials</h3>
-      <p className="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-700">
-        I'll fetch the modules for <strong>{courseCode}</strong>, download Canvas files, pages, and
-        assignment briefs, then process them for retrieval. Re-running this only imports new course
-        sources; marks, submissions, and people endpoints are not imported.
-      </p>
-
-      {status === "running" || status === "idle" ? (
-        <button
-          onClick={onStart}
-          disabled={status === "running"}
-          className="mt-6 rounded-full bg-anu-maroon px-5 py-2 text-sm font-semibold text-white transition hover:bg-anu-ink disabled:opacity-50"
-        >
-          {status === "running" ? "Loading…" : "Load course materials"}
-        </button>
-      ) : null}
-
-      {status === "running" && (
-        <div className="mt-6 space-y-2 rounded-xl bg-anu-paper p-4">
-          <p className="text-sm font-medium text-anu-ink">{step || "working…"}</p>
-          {progress && progress.total > 0 && (
-            <>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-white">
-                <div
-                  className="h-full bg-anu-maroon transition-all"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <p className="text-xs text-zinc-600">
-                {progress.done} / {progress.total} items · {pct}%
-              </p>
-            </>
-          )}
-        </div>
-      )}
-
-      {status === "error" && (
-        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-          <p className="font-semibold">Ingestion failed</p>
-          <p className="mt-1">{error}</p>
-          <button
-            onClick={onStart}
-            className="mt-3 rounded-full bg-red-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
-          >
-            Retry
-          </button>
-        </div>
-      )}
-    </section>
   );
 }
 
@@ -910,11 +762,9 @@ function QuizCard({
 function SourcesSidebar({
   documents,
   skippedCount,
-  onReingest,
 }: {
   documents: DocSummary[];
   skippedCount: number;
-  onReingest: () => void;
 }) {
   const grouped = new Map<string, DocSummary[]>();
   for (const d of documents) {
@@ -958,12 +808,12 @@ function SourcesSidebar({
             </li>
           ))}
         </ul>
-        <button
-          onClick={onReingest}
-          className="mt-3 w-full rounded-full border border-anu-border bg-anu-paper px-3 py-1.5 text-[11px] font-medium text-zinc-600 hover:border-anu-maroon hover:text-anu-maroon"
+        <Link
+          href="/admin"
+          className="mt-3 block w-full rounded-full border border-anu-border bg-anu-paper px-3 py-1.5 text-center text-[11px] font-medium text-zinc-600 hover:border-anu-maroon hover:text-anu-maroon"
         >
-          Re-index this course
-        </button>
+          Manage imports in admin
+        </Link>
       </div>
 
       <div className="rounded-2xl border border-anu-border bg-anu-paper p-4">
