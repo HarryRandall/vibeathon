@@ -16,8 +16,8 @@ export type DashboardCourseCard = {
   image: string | null;
 };
 
-/** Subset aligned with Canvas dashboard_cards / planner demo data. */
-export const DASHBOARD_COURSES: DashboardCourseCard[] = [
+/** Fallback when Canvas is unreachable or CANVAS_TOKEN is missing (offline / misconfig). */
+export const STATIC_FALLBACK_DASHBOARD_COURSES: DashboardCourseCard[] = [
   {
     id: '7624',
     courseCode: 'COMP4610/COMP8610',

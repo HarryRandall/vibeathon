@@ -1,3 +1,4 @@
+import type { DashboardCourseCard } from './canvas-demo';
 import { courseHref, FEATURE_COURSE_ID } from './canvas-demo';
 import { getCourseMeta, getModulesForCourse } from './dummy-data';
 
@@ -55,8 +56,8 @@ export type CourseHomeData = {
   sections: HomeSection[];
 };
 
-export function getCourseHomeData(courseId: string): CourseHomeData | null {
-  const meta = getCourseMeta(courseId);
+export function getCourseHomeData(courseId: string, catalogMeta?: DashboardCourseCard | null): CourseHomeData | null {
+  const meta = catalogMeta ?? getCourseMeta(courseId);
   if (!meta) return null;
 
   if (courseId !== FEATURE_COURSE_ID) {

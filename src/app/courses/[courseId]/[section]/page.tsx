@@ -2,7 +2,14 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import CanvasModulesList from '@/components/canvas/modules-list';
-import { getCourseMeta, getAnnouncementsForCourse, getAssignmentsForCourse, getDiscussionsForCourse, getGradesForCourse, getPeopleForCourse } from '@/lib/dummy-data';
+import {
+  getAnnouncementsForCourse,
+  getAssignmentsForCourse,
+  getDiscussionsForCourse,
+  getGradesForCourse,
+  getPeopleForCourse,
+} from '@/lib/dummy-data';
+import { findCourseCard, loadSyncedDashboardCourses } from '@/lib/dashboard-courses-server';
 import { COURSE_CONTENT_SECTIONS, type CourseContentSection } from '@/lib/course-content';
 import { getSupabaseModulesForCourse } from '@/lib/course-modules';
 
@@ -10,7 +17,8 @@ export default async function CourseSectionPage({ params }: { params: { courseId
   const { courseId, section } = params;
   if (!COURSE_CONTENT_SECTIONS.includes(section as CourseContentSection)) notFound();
 
-  const meta = getCourseMeta(courseId);
+  const { courses } = await loadSyncedDashboardCourses();
+  const meta = findCourseCard(courses, courseId);
   const courseLabel = meta?.shortName ?? `Course ${courseId}`;
   const courseCode = meta?.courseCode ?? courseId;
 

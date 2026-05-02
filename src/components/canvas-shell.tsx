@@ -17,7 +17,8 @@ import {
   IconStudio,
 } from '@/components/canvas/canvas-icons';
 import CanvasTopBar from '@/components/canvas/course-top-bar';
-import { courseHref, DASHBOARD_COURSES, FEATURE_COURSE_ID } from '@/lib/canvas-demo';
+import { useDashboardCourses } from '@/context/dashboard-courses-context';
+import { FEATURE_COURSE_ID } from '@/lib/canvas-demo';
 import { buildCourseSectionTabs } from '@/lib/course-content';
 import { DEMO_GROUPS, DEMO_TODOS } from '@/lib/dummy-data';
 
@@ -25,8 +26,6 @@ const ANU_HEADER_LOGO =
   'https://instructure-uploads-apse2.s3.ap-southeast-2.amazonaws.com/account_268700000000000001/attachments/1294/Primary_Horizontal_GoldBlack_v2_200x200.png';
 
 const CANVAS_AVATAR_PLACEHOLDER = 'https://canvas.anu.edu.au/images/messages/avatar-50.png';
-
-const TERM_LABEL = 'First Semester, 2026';
 
 function sectionTabActive(pathname: string, href: string) {
   const isCourseHome = /^\/courses\/[^/]+$/.test(href);
@@ -47,6 +46,7 @@ function globalPageTitle(pathname: string): string {
 }
 
 export default function CanvasShell({ children }: { children: ReactNode }) {
+  const { courses, featuredCourseId } = useDashboardCourses();
   const pathname = usePathname();
   const [courseMenuOpen, setCourseMenuOpen] = useState(true);
   const [globalNavCollapsed, setGlobalNavCollapsed] = useState(false);
@@ -77,15 +77,21 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
     [activeCourseId],
   );
 
-  const displayCourseCode =
-    DASHBOARD_COURSES.find((c) => c.id === activeCourseId)?.courseCode ?? 'COMP4610/COMP8610';
+  const coursesNavHrefId = featuredCourseId ?? FEATURE_COURSE_ID;
+
+  const activeCourseCard = useMemo(
+    () => (activeCourseId ? courses.find((c) => c.id === activeCourseId) : undefined),
+    [activeCourseId, courses],
+  );
+
+  const displayCourseCode = activeCourseCard?.courseCode ?? 'Course';
 
   const globalTitle = globalPageTitle(pathname);
 
   const mobileTitle = isDashboard
     ? 'Dashboard'
     : isCourseShell
-      ? DASHBOARD_COURSES.find((c) => c.id === activeCourseId)?.courseCode ?? 'Course'
+      ? activeCourseCard?.courseCode ?? 'Course'
       : globalTitle;
 
   const navDash = isDashboard;
@@ -153,7 +159,7 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
             <li className={`menu-item ic-app-header__menu-list-item ${navCourses ? 'ic-app-header__menu-list-item--active' : ''}`}>
               <Link
                 id="global_nav_courses_link"
-                href={`/courses/${FEATURE_COURSE_ID}`}
+                href={`/courses/${coursesNavHrefId}`}
                 className="ic-app-header__menu-list-link"
                 aria-current={navCourses ? 'page' : undefined}
               >
@@ -251,6 +257,7 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
             pathname={pathname}
             isCourseShell={isCourseShell}
             activeCourseId={activeCourseId}
+            breadcrumbCourseCode={activeCourseCard?.courseCode}
             courseMenuOpen={courseMenuOpen}
             globalNavCollapsed={globalNavCollapsed}
             globalTitle={globalTitle}
@@ -266,7 +273,7 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
             <div id="left-side" className={`ic-app-course-menu ic-sticky-on list-view ${courseMenuOpen ? '' : 'collapsed'}`}>
               <div id="sticky-container" className="ic-sticky-frame">
                 <span id="section-tabs-header-subtitle" className="ellipsis">
-                  {TERM_LABEL}
+                  {activeCourseCard?.term ?? 'Courses'}
                 </span>
                 <nav role="navigation" aria-label="Courses Navigation Menu">
                   <ul id="section-tabs">
@@ -369,7 +376,10 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
                         </div>
                         <ul className="right-side-list events">
                           <li className="event">
-                            <Link href={`/courses/${FEATURE_COURSE_ID}/grades`} className="recent_feedback_icon">
+                            <Link
+                              href={`/courses/${activeCourseId ?? coursesNavHrefId}/grades`}
+                              className="recent_feedback_icon"
+                            >
                               <i className="icon-check">✓</i>
                               <div className="event-details">
                                 <b className="event-details__title recent_feedback_title">C-Lab-2 submission site</b>

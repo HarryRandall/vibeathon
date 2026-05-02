@@ -1,11 +1,12 @@
 import Link from 'next/link';
 import { getCourseHomeData } from '@/lib/course-content';
-import { getCourseMeta } from '@/lib/dummy-data';
+import { findCourseCard, loadSyncedDashboardCourses } from '@/lib/dashboard-courses-server';
 
-export default function CourseHomePage({ params }: { params: { courseId: string } }) {
+export default async function CourseHomePage({ params }: { params: { courseId: string } }) {
   const courseId = params.courseId;
-  const meta = getCourseMeta(courseId);
-  const content = getCourseHomeData(courseId);
+  const { courses } = await loadSyncedDashboardCourses();
+  const meta = findCourseCard(courses, courseId);
+  const content = getCourseHomeData(courseId, meta);
 
   if (content && meta) {
     return (

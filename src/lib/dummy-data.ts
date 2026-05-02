@@ -1,5 +1,5 @@
 import type { DashboardCourseCard } from './canvas-demo';
-import { DASHBOARD_COURSES } from './canvas-demo';
+import { STATIC_FALLBACK_DASHBOARD_COURSES } from './canvas-demo';
 
 /** Single dummy student — realistic ANU-style demo account. */
 export const DEMO_USER = {
@@ -126,7 +126,7 @@ export const DEMO_HISTORY: HistoryRow[] = [
 ];
 
 export function getCourseMeta(courseId: string): DashboardCourseCard | undefined {
-  return DASHBOARD_COURSES.find((c) => c.id === courseId);
+  return STATIC_FALLBACK_DASHBOARD_COURSES.find((c) => c.id === courseId);
 }
 
 export function getAssignmentsForCourse(courseId: string) {

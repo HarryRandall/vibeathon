@@ -9,6 +9,8 @@ type CanvasTopBarProps = {
   pathname: string;
   isCourseShell: boolean;
   activeCourseId: string | null;
+  /** Label for course breadcrumb; falls back to course id string from the URL when absent. */
+  breadcrumbCourseCode?: string | null;
   courseMenuOpen: boolean;
   globalNavCollapsed: boolean;
   globalTitle: string;
@@ -42,12 +44,12 @@ function IconHome() {
   );
 }
 
-function buildCourseCrumbs(pathname: string, activeCourseId: string | null): Crumb[] {
+function buildCourseCrumbs(pathname: string, activeCourseId: string | null, breadcrumbCourseCode?: string | null): Crumb[] {
   const crumbs: Crumb[] = [{ href: '/', label: 'My Dashboard', home: true }];
   if (!activeCourseId) return crumbs;
 
-  const courseMeta = getCourseMeta(activeCourseId);
-  const courseCode = courseMeta?.courseCode ?? activeCourseId;
+  const fallbackCode = getCourseMeta(activeCourseId)?.courseCode;
+  const courseCode = breadcrumbCourseCode ?? fallbackCode ?? activeCourseId;
   crumbs.push({ href: `/courses/${activeCourseId}`, label: courseCode });
 
   const section = pathname.split('/')[3];
@@ -75,6 +77,7 @@ export default function CanvasTopBar({
   pathname,
   isCourseShell,
   activeCourseId,
+  breadcrumbCourseCode,
   courseMenuOpen,
   globalNavCollapsed,
   globalTitle,
@@ -82,8 +85,11 @@ export default function CanvasTopBar({
   onToggleGlobalNav,
 }: CanvasTopBarProps) {
   const crumbs = useMemo(
-    () => (isCourseShell ? buildCourseCrumbs(pathname, activeCourseId) : buildGlobalCrumbs(globalTitle)),
-    [activeCourseId, globalTitle, isCourseShell, pathname],
+    () =>
+      isCourseShell
+        ? buildCourseCrumbs(pathname, activeCourseId, breadcrumbCourseCode)
+        : buildGlobalCrumbs(globalTitle),
+    [activeCourseId, breadcrumbCourseCode, globalTitle, isCourseShell, pathname],
   );
 
   const rightLabel = isCourseShell ? 'Course area' : 'Workspace';

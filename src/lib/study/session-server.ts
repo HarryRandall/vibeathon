@@ -1,6 +1,7 @@
 import 'server-only';
 
-import { getCourseMeta } from '@/lib/dummy-data';
+import { findCourseCard, loadSyncedDashboardCourses } from '@/lib/dashboard-courses-server';
+import { resolveSupabaseCourseId } from '@/lib/resolve-supabase-course-id';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { studyStore } from '@/lib/study/store';
 
@@ -23,7 +24,8 @@ export async function getStudySessionServerProps(courseIdStr: string): Promise<S
   const courseId = Number(courseIdStr);
   if (!courseId || Number.isNaN(courseId)) return null;
 
-  const meta = getCourseMeta(courseIdStr);
+  const { courses } = await loadSyncedDashboardCourses();
+  const meta = findCourseCard(courses, courseIdStr);
   const courseCode = meta?.courseCode ?? `Course ${courseIdStr}`;
 
   const corpus = studyStore.getCorpus(courseId);
@@ -59,12 +61,14 @@ export async function getStudySessionServerProps(courseIdStr: string): Promise<S
     };
   }
 
+  const courseFk = (await resolveSupabaseCourseId(supabase, courseIdStr)) ?? courseIdStr;
+
   const [{ data: course }, { data: files }] = await Promise.all([
-    supabase.from('courses').select('course_code, short_name').eq('id', courseIdStr).maybeSingle(),
+    supabase.from('courses').select('course_code, short_name').eq('id', courseFk).maybeSingle(),
     supabase
       .from('course_files')
       .select('id, name, kind, week_id, file_size, status, course_weeks(title)')
-      .eq('course_id', courseIdStr)
+      .eq('course_id', courseFk)
       .order('created_at', { ascending: false }),
   ]);
 

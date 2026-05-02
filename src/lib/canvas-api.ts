@@ -12,6 +12,11 @@ export type CanvasCourse = {
   term?: { name?: string };
   enrollment_term_id?: number;
   image_download_url?: string | null;
+  /** Present when requesting include[]=calendar_color */
+  calendar_color?: string | null;
+  /** Some tenants expose hex on the course payload */
+  course_color?: string | null;
+  workflow_state?: string | null;
 };
 
 export type CanvasModule = {
@@ -62,7 +67,7 @@ async function paged<T>(url: string, token: string): Promise<T[]> {
 
 export async function listCourses(token: string): Promise<CanvasCourse[]> {
   return paged<CanvasCourse>(
-    `${BASE}/api/v1/courses?per_page=100&enrollment_state=active&include[]=term`,
+    `${BASE}/api/v1/courses?per_page=100&enrollment_state=active&include[]=term&include[]=calendar_color`,
     token,
   );
 }

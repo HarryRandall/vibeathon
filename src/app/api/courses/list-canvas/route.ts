@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { listCourses } from '@/lib/canvas-api';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { syncCanvasCoursesCatalog } from '@/lib/sync-canvas-course-catalog';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,6 +12,14 @@ export async function GET() {
   try {
     const courses = await listCourses(token);
     const supabase = getSupabaseAdmin();
+
+    if (supabase) {
+      try {
+        await syncCanvasCoursesCatalog(supabase, courses);
+      } catch (syncErr) {
+        console.error('[list-canvas] catalog sync failed:', syncErr);
+      }
+    }
 
     if (!supabase) {
       return NextResponse.json({ courses: courses.map((course) => ({ ...course, importStatus: null })) });
