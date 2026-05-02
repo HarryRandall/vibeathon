@@ -655,25 +655,109 @@ function AskPane({
   const orderedSessions = [...chatHistorySessions].sort((a, b) => b.savedAt - a.savedAt);
   const hasMessages = messages.length > 0;
   const showNewChat = hasMessages || activeChatSessionId !== null;
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const hasHistory = orderedSessions.length > 0;
 
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-anu-border bg-white">
-        <div className="flex items-center justify-between gap-2 border-b border-anu-border px-5 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-anu-border px-5 py-2.5">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-anu-gold">
             {activeChatSessionId ? "Continuing chat" : hasMessages ? "Current chat" : "New chat"}
           </p>
-          {showNewChat && (
-            <button
-              type="button"
-              onClick={onNewChat}
-              disabled={asking}
-              className="rounded-full border border-anu-border bg-white px-3 py-1 text-[11px] font-semibold text-anu-ink transition hover:border-anu-maroon hover:text-anu-maroon disabled:opacity-50"
-            >
-              + New chat
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {hasHistory && (
+              <button
+                type="button"
+                onClick={() => setHistoryOpen((o) => !o)}
+                aria-expanded={historyOpen}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold transition ${
+                  historyOpen
+                    ? "border-anu-maroon bg-anu-maroon text-white"
+                    : "border-anu-border bg-white text-anu-ink hover:border-anu-maroon hover:text-anu-maroon"
+                }`}
+              >
+                Chat history
+                <span
+                  className={`rounded-full px-1.5 py-px text-[10px] font-semibold ${
+                    historyOpen ? "bg-white text-anu-maroon" : "bg-anu-paper text-anu-ink"
+                  }`}
+                >
+                  {orderedSessions.length}
+                </span>
+                <span aria-hidden className={`transition-transform ${historyOpen ? "rotate-180" : ""}`}>
+                  ▾
+                </span>
+              </button>
+            )}
+            {showNewChat && (
+              <button
+                type="button"
+                onClick={onNewChat}
+                disabled={asking}
+                className="rounded-full border border-anu-border bg-white px-3 py-1 text-[11px] font-semibold text-anu-ink transition hover:border-anu-maroon hover:text-anu-maroon disabled:opacity-50"
+              >
+                + New chat
+              </button>
+            )}
+          </div>
         </div>
+
+        {historyOpen && hasHistory && (
+          <div className="border-b border-anu-border bg-anu-paper/60 px-5 py-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-[11px] text-zinc-600">
+                Saved on this browser. Open a row to continue that conversation.
+              </p>
+              <span className="text-[11px] text-zinc-500">
+                {orderedSessions.length} chat{orderedSessions.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            <ul className="max-h-[260px] divide-y divide-anu-border overflow-y-auto rounded-xl border border-anu-border bg-white">
+              {orderedSessions.map((session) => {
+                const isOpen = activeChatSessionId === session.id;
+                const userCount = session.messages.filter((m) => m.role === "user").length;
+                return (
+                  <li
+                    key={session.id}
+                    className={`flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 ${
+                      isOpen ? "bg-anu-paper/80" : ""
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-anu-ink">{session.title}</p>
+                      <p className="mt-0.5 text-[11px] text-zinc-500">
+                        {userCount} question{userCount === 1 ? "" : "s"} · {formatQuizAge(session.savedAt)}
+                        {isOpen ? <span className="font-medium text-anu-maroon"> · open</span> : null}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onResumeChat(session.id);
+                          setHistoryOpen(false);
+                        }}
+                        className="rounded-full border border-anu-maroon bg-white px-3 py-1 text-xs font-semibold text-anu-maroon transition hover:bg-anu-maroon hover:text-white"
+                      >
+                        {isOpen ? "Focus" : "Open"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onRemoveChat(session.id)}
+                        className="rounded-full px-2 py-1 text-[11px] font-medium text-zinc-400 transition hover:text-red-700"
+                        aria-label={`Remove chat: ${session.title}`}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
         <div className="min-h-[400px] space-y-4 p-5">
           {messages.length === 0 && (
             <div className="space-y-3">
@@ -724,61 +808,6 @@ function AskPane({
           {asking ? "…" : "Ask"}
         </button>
       </div>
-
-      {orderedSessions.length > 0 && (
-        <div className="rounded-2xl border border-anu-border bg-white p-5">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-[10px] font-semibold uppercase tracking-wide text-anu-gold">
-              Chat history
-            </h3>
-            <span className="text-[11px] text-zinc-500">
-              {orderedSessions.length} chat{orderedSessions.length === 1 ? "" : "s"} on this browser
-            </span>
-          </div>
-          <p className="mt-1 text-xs text-zinc-600">
-            Open a row to reload its messages and continue the conversation.
-          </p>
-          <ul className="mt-3 divide-y divide-anu-border">
-            {orderedSessions.map((session) => {
-              const isOpen = activeChatSessionId === session.id;
-              const userCount = session.messages.filter((m) => m.role === "user").length;
-              return (
-                <li
-                  key={session.id}
-                  className={`flex flex-wrap items-center justify-between gap-2 py-3 first:pt-1 ${
-                    isOpen ? "-mx-2 rounded-xl bg-anu-paper/80 px-2" : ""
-                  }`}
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-anu-ink">{session.title}</p>
-                    <p className="mt-0.5 text-[11px] text-zinc-500">
-                      {userCount} question{userCount === 1 ? "" : "s"} · {formatQuizAge(session.savedAt)}
-                      {isOpen ? <span className="font-medium text-anu-maroon"> · open</span> : null}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => onResumeChat(session.id)}
-                      className="rounded-full border border-anu-maroon bg-white px-3 py-1 text-xs font-semibold text-anu-maroon transition hover:bg-anu-maroon hover:text-white"
-                    >
-                      {isOpen ? "Focus" : "Open"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onRemoveChat(session.id)}
-                      className="rounded-full px-2 py-1 text-[11px] font-medium text-zinc-400 transition hover:text-red-700"
-                      aria-label={`Remove chat: ${session.title}`}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
     </div>
   );
 }
