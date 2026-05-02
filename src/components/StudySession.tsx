@@ -12,6 +12,14 @@ import {
   type StoredQuizAnswers,
   type StoredQuizSession,
 } from "@/lib/study/quiz-history-storage";
+import {
+  MAX_CHAT_HISTORY_PER_COURSE,
+  loadChatSessions,
+  makeChatTitle,
+  saveChatSessions,
+  type StoredChatMessage,
+  type StoredChatSession,
+} from "@/lib/study/chat-history-storage";
 
 type DocSummary = {
   id: string;
@@ -109,6 +117,42 @@ function formatQuizAge(savedAt: number): string {
   return `${days} d ago`;
 }
 
+// Pulls every "[3]" / "[3,7]" style citation out of an assistant answer so we
+// can show only the sources the model actually leaned on (not the full top-K
+// retrieval set). Numbers are 1-based to match the prompt's [n] convention.
+function extractCitedIndices(content: string): Set<number> {
+  const out = new Set<number>();
+  const re = /\[\s*(\d+(?:\s*,\s*\d+)*)\s*\]/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content))) {
+    for (const part of m[1].split(",")) {
+      const n = Number(part.trim());
+      if (Number.isInteger(n) && n > 0) out.add(n);
+    }
+  }
+  return out;
+}
+
+function messagesToStored(messages: Message[]): StoredChatMessage[] {
+  const out: StoredChatMessage[] = [];
+  for (const m of messages) {
+    if (m.role === "user") {
+      out.push({ id: m.id, role: "user", content: m.content });
+    } else if (!m.pending) {
+      out.push({ id: m.id, role: "assistant", content: m.content, sources: m.sources });
+    }
+  }
+  return out;
+}
+
+function storedToMessages(stored: StoredChatMessage[]): Message[] {
+  return stored.map((m) =>
+    m.role === "user"
+      ? { id: m.id, role: "user", content: m.content }
+      : { id: m.id, role: "assistant", content: m.content, sources: m.sources, pending: false },
+  );
+}
+
 const SUGGESTED_QUESTIONS = [
   "Give me a high-level summary of what this course covers so far.",
   "What are the key concepts I need to know for the next assessment?",
@@ -138,6 +182,12 @@ export function StudySession({
   const [asking, setAsking] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const activeQuizSessionIdRef = useRef<string | null>(null);
+  const activeChatSessionIdRef = useRef<string | null>(null);
+
+  // Chat history state — saved chats live in localStorage, scoped per courseId.
+  const [chatHistorySessions, setChatHistorySessions] = useState<StoredChatSession[]>([]);
+  const [activeChatSessionId, setActiveChatSessionId] = useState<string | null>(null);
+  activeChatSessionIdRef.current = activeChatSessionId;
 
   // Quiz state
   const [quizTopic, setQuizTopic] = useState("");
@@ -158,6 +208,11 @@ export function StudySession({
     setAnswers({});
     setQuizError(null);
     setQuizTopic("");
+
+    setChatHistorySessions(loadChatSessions(courseId));
+    setActiveChatSessionId(null);
+    setMessages([]);
+    setInput("");
   }, [courseId]);
 
   useEffect(() => {
@@ -177,6 +232,32 @@ export function StudySession({
     }, 400);
     return () => window.clearTimeout(timer);
   }, [quiz, answers, activeQuizSessionId, courseId]);
+
+  const persistChatSession = useCallback(
+    (finalMessages: Message[]) => {
+      const stored = messagesToStored(finalMessages);
+      if (stored.length === 0) return;
+      const firstUser = stored.find((m) => m.role === "user");
+      const title = firstUser ? makeChatTitle(firstUser.content) : "(untitled chat)";
+      const now = Date.now();
+      const sessionId = activeChatSessionIdRef.current ?? crypto.randomUUID();
+      activeChatSessionIdRef.current = sessionId;
+      setActiveChatSessionId(sessionId);
+
+      setChatHistorySessions((prev) => {
+        const existing = prev.find((s) => s.id === sessionId);
+        const entry: StoredChatSession = existing
+          ? { ...existing, savedAt: now, messages: stored, title }
+          : { id: sessionId, savedAt: now, courseId, title, messages: stored };
+        // Move active session to the top, then trim to the cap.
+        const rest = prev.filter((s) => s.id !== sessionId);
+        const next = [entry, ...rest].slice(0, MAX_CHAT_HISTORY_PER_COURSE);
+        saveChatSessions(courseId, next);
+        return next;
+      });
+    },
+    [courseId],
+  );
 
   const askQuestion = useCallback(
     async (questionOverride?: string) => {
@@ -236,25 +317,69 @@ export function StudySession({
             all.map((m) => (m.id === assistantId && m.role === "assistant" ? { ...m, content: acc } : m)),
           );
         }
-        setMessages((all) =>
-          all.map((m) =>
+        let finalMessages: Message[] = [];
+        setMessages((all) => {
+          finalMessages = all.map((m) =>
             m.id === assistantId && m.role === "assistant" ? { ...m, content: acc, sources, pending: false } : m,
-          ),
-        );
+          );
+          return finalMessages;
+        });
+        persistChatSession(finalMessages);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        setMessages((all) =>
-          all.map((m) =>
+        let finalMessages: Message[] = [];
+        setMessages((all) => {
+          finalMessages = all.map((m) =>
             m.id === assistantId && m.role === "assistant"
               ? { ...m, content: `_Error: ${message}_`, pending: false }
               : m,
-          ),
-        );
+          );
+          return finalMessages;
+        });
+        persistChatSession(finalMessages);
       } finally {
         setAsking(false);
       }
     },
-    [input, asking, messages, courseId],
+    [input, asking, messages, courseId, persistChatSession],
+  );
+
+  const startNewChat = useCallback(() => {
+    setMessages([]);
+    setInput("");
+    setActiveChatSessionId(null);
+    activeChatSessionIdRef.current = null;
+  }, []);
+
+  const resumeChatSession = useCallback(
+    (sessionId: string) => {
+      const s = chatHistorySessions.find((x) => x.id === sessionId);
+      if (!s) return;
+      setMessages(storedToMessages(s.messages));
+      setActiveChatSessionId(sessionId);
+      activeChatSessionIdRef.current = sessionId;
+      setInput("");
+      setTab("ask");
+    },
+    [chatHistorySessions],
+  );
+
+  const removeChatSession = useCallback(
+    (sessionId: string) => {
+      const clearCurrent = activeChatSessionIdRef.current === sessionId;
+      setChatHistorySessions((prev) => {
+        const next = prev.filter((s) => s.id !== sessionId);
+        saveChatSessions(courseId, next);
+        return next;
+      });
+      if (clearCurrent) {
+        setMessages([]);
+        setInput("");
+        setActiveChatSessionId(null);
+        activeChatSessionIdRef.current = null;
+      }
+    },
+    [courseId],
   );
 
   const generateQuiz = useCallback(async () => {
@@ -444,6 +569,11 @@ export function StudySession({
           onSend={() => askQuestion()}
           onSuggested={(q) => askQuestion(q)}
           messagesEndRef={messagesEndRef}
+          chatHistorySessions={chatHistorySessions}
+          activeChatSessionId={activeChatSessionId}
+          onNewChat={startNewChat}
+          onResumeChat={resumeChatSession}
+          onRemoveChat={removeChatSession}
         />
       ) : tab === "quiz" ? (
         <QuizPane
@@ -503,6 +633,11 @@ function AskPane({
   onSend,
   onSuggested,
   messagesEndRef,
+  chatHistorySessions,
+  activeChatSessionId,
+  onNewChat,
+  onResumeChat,
+  onRemoveChat,
 }: {
   messages: Message[];
   input: string;
@@ -511,34 +646,60 @@ function AskPane({
   onSend: () => void;
   onSuggested: (q: string) => void;
   messagesEndRef: React.RefObject<HTMLDivElement>;
+  chatHistorySessions: StoredChatSession[];
+  activeChatSessionId: string | null;
+  onNewChat: () => void;
+  onResumeChat: (id: string) => void;
+  onRemoveChat: (id: string) => void;
 }) {
+  const orderedSessions = [...chatHistorySessions].sort((a, b) => b.savedAt - a.savedAt);
+  const hasMessages = messages.length > 0;
+  const showNewChat = hasMessages || activeChatSessionId !== null;
+
   return (
     <div className="space-y-4">
-      <div className="min-h-[400px] space-y-4 rounded-2xl border border-anu-border bg-white p-5">
-        {messages.length === 0 && (
-          <div className="space-y-3">
-            <p className="text-sm text-zinc-600">
-              Ask a question about this course. Answers are grounded in the course's actual
-              materials with inline citations like [1].
-            </p>
-            <div className="space-y-2">
-              {SUGGESTED_QUESTIONS.map((q) => (
-                <button
-                  key={q}
-                  onClick={() => onSuggested(q)}
-                  className="block w-full rounded-lg border border-anu-border bg-anu-paper px-3 py-2 text-left text-xs text-zinc-700 hover:border-anu-maroon hover:text-anu-ink"
-                >
-                  {q}
-                </button>
-              ))}
+      <div className="rounded-2xl border border-anu-border bg-white">
+        <div className="flex items-center justify-between gap-2 border-b border-anu-border px-5 py-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-anu-gold">
+            {activeChatSessionId ? "Continuing chat" : hasMessages ? "Current chat" : "New chat"}
+          </p>
+          {showNewChat && (
+            <button
+              type="button"
+              onClick={onNewChat}
+              disabled={asking}
+              className="rounded-full border border-anu-border bg-white px-3 py-1 text-[11px] font-semibold text-anu-ink transition hover:border-anu-maroon hover:text-anu-maroon disabled:opacity-50"
+            >
+              + New chat
+            </button>
+          )}
+        </div>
+        <div className="min-h-[400px] space-y-4 p-5">
+          {messages.length === 0 && (
+            <div className="space-y-3">
+              <p className="text-sm text-zinc-600">
+                Ask a question about this course. Answers are grounded in the course&apos;s actual
+                materials with inline citations like [1].
+              </p>
+              <div className="space-y-2">
+                {SUGGESTED_QUESTIONS.map((q) => (
+                  <button
+                    key={q}
+                    onClick={() => onSuggested(q)}
+                    className="block w-full rounded-lg border border-anu-border bg-anu-paper px-3 py-2 text-left text-xs text-zinc-700 hover:border-anu-maroon hover:text-anu-ink"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {messages.map((m) => (
-          <MessageBubble key={m.id} message={m} />
-        ))}
-        <div ref={messagesEndRef} />
+          {messages.map((m) => (
+            <MessageBubble key={m.id} message={m} />
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
       <div className="flex gap-2">
@@ -563,6 +724,61 @@ function AskPane({
           {asking ? "…" : "Ask"}
         </button>
       </div>
+
+      {orderedSessions.length > 0 && (
+        <div className="rounded-2xl border border-anu-border bg-white p-5">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-[10px] font-semibold uppercase tracking-wide text-anu-gold">
+              Chat history
+            </h3>
+            <span className="text-[11px] text-zinc-500">
+              {orderedSessions.length} chat{orderedSessions.length === 1 ? "" : "s"} on this browser
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-zinc-600">
+            Open a row to reload its messages and continue the conversation.
+          </p>
+          <ul className="mt-3 divide-y divide-anu-border">
+            {orderedSessions.map((session) => {
+              const isOpen = activeChatSessionId === session.id;
+              const userCount = session.messages.filter((m) => m.role === "user").length;
+              return (
+                <li
+                  key={session.id}
+                  className={`flex flex-wrap items-center justify-between gap-2 py-3 first:pt-1 ${
+                    isOpen ? "-mx-2 rounded-xl bg-anu-paper/80 px-2" : ""
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-anu-ink">{session.title}</p>
+                    <p className="mt-0.5 text-[11px] text-zinc-500">
+                      {userCount} question{userCount === 1 ? "" : "s"} · {formatQuizAge(session.savedAt)}
+                      {isOpen ? <span className="font-medium text-anu-maroon"> · open</span> : null}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => onResumeChat(session.id)}
+                      className="rounded-full border border-anu-maroon bg-white px-3 py-1 text-xs font-semibold text-anu-maroon transition hover:bg-anu-maroon hover:text-white"
+                    >
+                      {isOpen ? "Focus" : "Open"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveChat(session.id)}
+                      className="rounded-full px-2 py-1 text-[11px] font-medium text-zinc-400 transition hover:text-red-700"
+                      aria-label={`Remove chat: ${session.title}`}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
@@ -577,6 +793,16 @@ function MessageBubble({ message }: { message: Message }) {
       </div>
     );
   }
+
+  // Show only the sources the model actually cited via [n] markers in its
+  // answer. Falls back to the full retrieved set if no [n] tags were emitted
+  // (e.g. early in a stream, or if the answer just says "I don't know").
+  const cited = extractCitedIndices(message.content);
+  const citedSources = message.sources.filter((s) => cited.has(s.index));
+  const otherSources = message.sources.filter((s) => !cited.has(s.index));
+  const showCitedOnly = citedSources.length > 0;
+  const visibleSources = showCitedOnly ? citedSources : message.sources;
+
   return (
     <div className="flex justify-start">
       <div className="max-w-[90%] space-y-2">
@@ -603,33 +829,56 @@ function MessageBubble({ message }: { message: Message }) {
             </span>
           )}
         </div>
-        {message.sources.length > 0 && (
-          <details className="rounded-xl border border-anu-border bg-white p-3">
+        {message.pending ? null : visibleSources.length > 0 ? (
+          <details className="rounded-xl border border-anu-border bg-white p-3" open>
             <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-zinc-600">
-              Sources ({message.sources.length})
+              {showCitedOnly
+                ? `Cited sources (${citedSources.length})`
+                : `Retrieved sources (${visibleSources.length})`}
             </summary>
             <ul className="mt-2 space-y-2 text-xs">
-              {message.sources.map((s) => (
-                <li key={s.index} className="border-l-2 border-anu-gold pl-3">
-                  <a
-                    href={s.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-semibold text-anu-maroon hover:underline"
-                  >
-                    [{s.index}] {s.documentTitle}
-                  </a>
-                  {s.moduleName && (
-                    <span className="ml-2 text-zinc-500">· {s.moduleName}</span>
-                  )}
-                  <p className="mt-1 italic text-zinc-600">{s.excerpt.slice(0, 250)}{s.excerpt.length > 250 ? "…" : ""}</p>
-                </li>
+              {visibleSources.map((s) => (
+                <SourceListItem key={s.index} source={s} />
               ))}
             </ul>
+            {showCitedOnly && otherSources.length > 0 && (
+              <details className="mt-3 border-t border-dashed border-anu-border pt-2">
+                <summary className="cursor-pointer text-[11px] font-medium text-zinc-500 hover:text-anu-ink">
+                  + {otherSources.length} more retrieved (not cited)
+                </summary>
+                <ul className="mt-2 space-y-2 text-xs">
+                  {otherSources.map((s) => (
+                    <SourceListItem key={s.index} source={s} muted />
+                  ))}
+                </ul>
+              </details>
+            )}
           </details>
-        )}
+        ) : null}
       </div>
     </div>
+  );
+}
+
+function SourceListItem({ source, muted }: { source: Source; muted?: boolean }) {
+  return (
+    <li
+      className={`border-l-2 pl-3 ${muted ? "border-anu-border opacity-80" : "border-anu-gold"}`}
+    >
+      <a
+        href={source.url}
+        target="_blank"
+        rel="noreferrer"
+        className={`font-semibold hover:underline ${muted ? "text-zinc-600" : "text-anu-maroon"}`}
+      >
+        [{source.index}] {source.documentTitle}
+      </a>
+      {source.moduleName && <span className="ml-2 text-zinc-500">· {source.moduleName}</span>}
+      <p className="mt-1 italic text-zinc-600">
+        {source.excerpt.slice(0, 250)}
+        {source.excerpt.length > 250 ? "…" : ""}
+      </p>
+    </li>
   );
 }
 
