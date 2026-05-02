@@ -50,6 +50,17 @@ type QuizResponse = {
   modelUsed: string;
 };
 
+type AnswerState = {
+  picked?: number; // MCQ: option index the user clicked
+  text?: string; // short_answer: typed answer
+  submitted?: boolean;
+  grading?: boolean; // short_answer: LLM call in flight
+  correct?: boolean;
+  score?: number; // short_answer: 0..1
+  feedback?: string; // short_answer: LLM feedback
+  error?: string;
+};
+
 const SUGGESTED_QUESTIONS = [
   "Give me a high-level summary of what this course covers so far.",
   "What are the key concepts I need to know for the next assessment?",
@@ -90,7 +101,7 @@ export function StudySession({
   const [quizCount, setQuizCount] = useState(5);
   const [quizLoading, setQuizLoading] = useState(false);
   const [quiz, setQuiz] = useState<QuizResponse | null>(null);
-  const [revealed, setRevealed] = useState<Record<number, boolean>>({});
+  const [answers, setAnswers] = useState<Record<number, AnswerState>>({});
   const [quizError, setQuizError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -174,9 +185,11 @@ export function StudySession({
       };
       setMessages((m) => [...m, userMsg, assistantMsg]);
 
-      const history = messages.flatMap((m) =>
-        m.role === "user" ? [{ role: "user" as const, content: m.content }] : m.role === "assistant" && !m.pending ? [{ role: "assistant" as const, content: m.content }] : [],
-      );
+      const history: { role: "user" | "assistant"; content: string }[] = [];
+      for (const m of messages) {
+        if (m.role === "user") history.push({ role: "user", content: m.content });
+        else if (m.role === "assistant" && !m.pending) history.push({ role: "assistant", content: m.content });
+      }
 
       try {
         const res = await fetch("/api/study/ask", {
@@ -238,7 +251,7 @@ export function StudySession({
     setQuizLoading(true);
     setQuizError(null);
     setQuiz(null);
-    setRevealed({});
+    setAnswers({});
     try {
       const res = await fetch("/api/study/quiz", {
         method: "POST",
@@ -257,6 +270,95 @@ export function StudySession({
       setQuizLoading(false);
     }
   }, [quizTopic, quizCount, quizLoading, courseId]);
+
+  const pickOption = useCallback((i: number, optIdx: number) => {
+    setAnswers((s) => {
+      const cur = s[i] ?? {};
+      if (cur.submitted) return s;
+      return { ...s, [i]: { ...cur, picked: optIdx } };
+    });
+  }, []);
+
+  const setShortAnswerText = useCallback((i: number, text: string) => {
+    setAnswers((s) => {
+      const cur = s[i] ?? {};
+      if (cur.submitted) return s;
+      return { ...s, [i]: { ...cur, text } };
+    });
+  }, []);
+
+  const submitAnswer = useCallback(
+    async (i: number) => {
+      if (!quiz) return;
+      const q = quiz.quiz.questions[i];
+      const cur = answers[i] ?? {};
+      if (cur.submitted || cur.grading) return;
+
+      if (q.type === "multiple_choice") {
+        if (cur.picked === undefined) return;
+        const correct = cur.picked === q.correctIndex;
+        setAnswers((s) => ({ ...s, [i]: { ...cur, submitted: true, correct } }));
+        return;
+      }
+
+      const text = (cur.text ?? "").trim();
+      if (!text) return;
+      setAnswers((s) => ({ ...s, [i]: { ...cur, grading: true, error: undefined } }));
+      try {
+        const res = await fetch("/api/study/grade", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            courseId,
+            question: q.prompt,
+            expectedAnswer: q.correctAnswer,
+            studentAnswer: text,
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message ?? `Grade failed (HTTP ${res.status})`);
+        }
+        const data = await res.json();
+        setAnswers((s) => ({
+          ...s,
+          [i]: {
+            ...cur,
+            submitted: true,
+            grading: false,
+            correct: data.result.correct,
+            score: data.result.score,
+            feedback: data.result.feedback,
+          },
+        }));
+      } catch (err) {
+        setAnswers((s) => ({
+          ...s,
+          [i]: { ...cur, grading: false, error: err instanceof Error ? err.message : String(err) },
+        }));
+      }
+    },
+    [quiz, answers, courseId],
+  );
+
+  const askFollowUp = useCallback(
+    (i: number) => {
+      if (!quiz) return;
+      const q = quiz.quiz.questions[i];
+      const ans = answers[i];
+      let studentAnswerText = "(no answer recorded)";
+      if (q.type === "multiple_choice" && ans?.picked !== undefined) {
+        studentAnswerText = `${String.fromCharCode(65 + ans.picked)}. ${q.options[ans.picked]}`;
+      } else if (q.type === "short_answer" && ans?.text) {
+        studentAnswerText = ans.text;
+      }
+      const verdict = ans?.correct ? "I got it correct." : "I got it wrong.";
+      const prefill = `Follow-up on quiz Q${i + 1}: "${q.prompt}"\n\nMy answer: ${studentAnswerText}\n${verdict}\n\nExplain in detail using the course materials, and tell me what concept I should revisit.`;
+      setInput(prefill);
+      setTab("ask");
+    },
+    [quiz, answers],
+  );
 
   if (!ingested) {
     return (
@@ -300,11 +402,14 @@ export function StudySession({
             quiz={quiz}
             loading={quizLoading}
             error={quizError}
-            revealed={revealed}
+            answers={answers}
             onTopic={setQuizTopic}
             onCount={setQuizCount}
             onGenerate={generateQuiz}
-            onReveal={(i) => setRevealed((r) => ({ ...r, [i]: true }))}
+            onPick={pickOption}
+            onText={setShortAnswerText}
+            onSubmit={submitAnswer}
+            onAskFollowUp={askFollowUp}
           />
         )}
       </div>
@@ -561,22 +666,28 @@ function QuizPane({
   quiz,
   loading,
   error,
-  revealed,
+  answers,
   onTopic,
   onCount,
   onGenerate,
-  onReveal,
+  onPick,
+  onText,
+  onSubmit,
+  onAskFollowUp,
 }: {
   topic: string;
   count: number;
   quiz: QuizResponse | null;
   loading: boolean;
   error: string | null;
-  revealed: Record<number, boolean>;
+  answers: Record<number, AnswerState>;
   onTopic: (v: string) => void;
   onCount: (v: number) => void;
   onGenerate: () => void;
-  onReveal: (i: number) => void;
+  onPick: (i: number, optIdx: number) => void;
+  onText: (i: number, text: string) => void;
+  onSubmit: (i: number) => void;
+  onAskFollowUp: (i: number) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -629,8 +740,11 @@ function QuizPane({
               key={i}
               q={q}
               index={i}
-              revealed={!!revealed[i]}
-              onReveal={() => onReveal(i)}
+              answer={answers[i] ?? {}}
+              onPick={(optIdx) => onPick(i, optIdx)}
+              onText={(t) => onText(i, t)}
+              onSubmit={() => onSubmit(i)}
+              onAskFollowUp={() => onAskFollowUp(i)}
               sourceLabels={quiz.sourceLabels}
             />
           ))}
@@ -643,16 +757,33 @@ function QuizPane({
 function QuizCard({
   q,
   index,
-  revealed,
-  onReveal,
+  answer,
+  onPick,
+  onText,
+  onSubmit,
+  onAskFollowUp,
   sourceLabels,
 }: {
   q: Quiz["questions"][number];
   index: number;
-  revealed: boolean;
-  onReveal: () => void;
+  answer: AnswerState;
+  onPick: (optIdx: number) => void;
+  onText: (text: string) => void;
+  onSubmit: () => void;
+  onAskFollowUp: () => void;
   sourceLabels: { index: number; title: string; url: string }[];
 }) {
+  const submitted = !!answer.submitted;
+  const grading = !!answer.grading;
+  const verdictTone = answer.correct
+    ? "border-emerald-400 bg-emerald-50 text-emerald-900"
+    : "border-rose-300 bg-rose-50 text-rose-900";
+
+  const canSubmit =
+    !submitted &&
+    !grading &&
+    (q.type === "multiple_choice" ? answer.picked !== undefined : !!(answer.text ?? "").trim());
+
   return (
     <div className="rounded-2xl border border-anu-border bg-white p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -666,42 +797,91 @@ function QuizCard({
       {q.type === "multiple_choice" && (
         <ul className="mt-3 space-y-1.5">
           {q.options.map((opt, i) => {
-            const isCorrect = revealed && i === q.correctIndex;
+            const isPicked = answer.picked === i;
+            const isCorrectIdx = i === q.correctIndex;
+            let cls = "border-anu-border bg-anu-paper text-zinc-800 hover:border-anu-maroon";
+            if (submitted) {
+              if (isCorrectIdx) cls = "border-emerald-400 bg-emerald-50 text-emerald-900";
+              else if (isPicked) cls = "border-rose-300 bg-rose-50 text-rose-900";
+              else cls = "border-anu-border bg-anu-paper text-zinc-700";
+            } else if (isPicked) {
+              cls = "border-anu-maroon bg-anu-paper text-anu-ink";
+            }
             return (
-              <li
-                key={i}
-                className={`rounded-lg border px-3 py-2 text-sm ${
-                  isCorrect
-                    ? "border-emerald-400 bg-emerald-50 text-emerald-900"
-                    : "border-anu-border bg-anu-paper text-zinc-800"
-                }`}
-              >
-                <span className="font-mono text-xs text-zinc-500">{String.fromCharCode(65 + i)}.</span>{" "}
-                {opt}
-                {isCorrect && <span className="ml-2 text-xs font-semibold">✓ correct</span>}
+              <li key={i}>
+                <button
+                  type="button"
+                  onClick={() => !submitted && onPick(i)}
+                  disabled={submitted}
+                  className={`flex w-full items-start gap-2 rounded-lg border px-3 py-2 text-left text-sm transition ${cls} ${
+                    submitted ? "cursor-default" : "cursor-pointer"
+                  }`}
+                >
+                  <span className="font-mono text-xs text-zinc-500">
+                    {String.fromCharCode(65 + i)}.
+                  </span>
+                  <span className="flex-1">{opt}</span>
+                  {submitted && isCorrectIdx && (
+                    <span className="text-xs font-semibold">✓ correct</span>
+                  )}
+                  {submitted && isPicked && !isCorrectIdx && (
+                    <span className="text-xs font-semibold">✗ your pick</span>
+                  )}
+                </button>
               </li>
             );
           })}
         </ul>
       )}
 
-      {!revealed ? (
-        <button
-          onClick={onReveal}
-          className="mt-3 rounded-full border border-anu-border bg-white px-4 py-1.5 text-xs font-semibold text-anu-ink hover:border-anu-maroon hover:text-anu-maroon"
-        >
-          Reveal answer
-        </button>
+      {q.type === "short_answer" && (
+        <textarea
+          value={answer.text ?? ""}
+          onChange={(e) => onText(e.target.value)}
+          disabled={submitted || grading}
+          placeholder="Type your answer…"
+          rows={3}
+          className="mt-3 w-full rounded-lg border border-anu-border bg-anu-paper px-3 py-2 text-sm focus:border-anu-maroon focus:outline-none disabled:opacity-70"
+        />
+      )}
+
+      {!submitted ? (
+        <div className="mt-3 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={!canSubmit}
+            className="rounded-full bg-anu-maroon px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-anu-ink disabled:opacity-50"
+          >
+            {grading ? "Grading…" : "Submit answer"}
+          </button>
+          {answer.error && (
+            <span className="text-xs text-red-700">{answer.error}</span>
+          )}
+        </div>
       ) : (
-        <div className="mt-3 space-y-2 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-900">
+        <div className={`mt-3 space-y-2 rounded-lg border px-3 py-2.5 text-xs ${verdictTone}`}>
+          <p className="font-semibold">
+            {answer.correct ? "✓ Correct" : "✗ Not quite"}
+            {q.type === "short_answer" && typeof answer.score === "number" && (
+              <span className="ml-2 font-normal opacity-80">
+                (score {Math.round(answer.score * 100)}%)
+              </span>
+            )}
+          </p>
+          {q.type === "short_answer" && answer.feedback && (
+            <p>
+              <span className="font-semibold">Feedback:</span> {answer.feedback}
+            </p>
+          )}
           <p>
-            <span className="font-semibold">Answer:</span> {q.correctAnswer}
+            <span className="font-semibold">Expected answer:</span> {q.correctAnswer}
           </p>
           <p>
             <span className="font-semibold">Why:</span> {q.explanation}
           </p>
           {q.citations.length > 0 && (
-            <p className="text-[11px] text-emerald-800">
+            <p className="text-[11px] opacity-90">
               Sources:{" "}
               {q.citations.map((idx, k) => {
                 const s = sourceLabels.find((sl) => sl.index === idx);
@@ -720,6 +900,13 @@ function QuizCard({
               })}
             </p>
           )}
+          <button
+            type="button"
+            onClick={onAskFollowUp}
+            className="mt-1 rounded-full border border-current bg-white/60 px-3 py-1 text-[11px] font-semibold transition hover:bg-white"
+          >
+            Ask follow-up →
+          </button>
         </div>
       )}
     </div>

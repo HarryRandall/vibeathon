@@ -2,116 +2,97 @@ import Link from "next/link";
 
 import { CanvasError, getCanvasClientFromEnv } from "@/lib/canvas/client";
 import { studyStore } from "@/lib/study/store";
-import { Header } from "@/components/Header";
-import { ErrorState, SetupNeeded } from "@/components/ErrorState";
-import { CoursePickerCard } from "@/components/CoursePickerCard";
+import { SetupNeeded } from "@/components/ErrorState";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const COURSE_COLORS = [
+  "#324A4D", "#008400", "#177B63", "#91349B",
+  "#E1185C", "#BE830E", "#5A1A1A", "#0066CC",
+];
+
 export default async function HomePage() {
   if (!process.env.CANVAS_TOKEN || !process.env.OPENAI_API_KEY) {
     return (
-      <>
-        <Header />
-        <main className="mx-auto max-w-5xl px-6 py-10">
-          <SetupNeeded />
-        </main>
-      </>
+      <main className="mx-auto max-w-5xl px-6 py-10">
+        <SetupNeeded />
+      </main>
     );
   }
 
-  let user: { id: number; name: string };
-  let courses: { id: number; code: string; name: string }[];
+  let courses: { id: number; code: string; name: string }[] = [];
   try {
     const client = getCanvasClientFromEnv();
-    const [profile, raw] = await Promise.all([
-      client.getProfile(),
-      client.getActiveCourses(),
-    ]);
-    user = { id: profile.id, name: profile.name };
+    const raw = await client.getActiveCourses();
     courses = raw
       .filter((c) => c.workflow_state === "available")
       .map((c) => ({ id: c.id, code: c.course_code || c.name, name: c.name }));
   } catch (err) {
     if (err instanceof CanvasError && err.status === 401) {
       return (
-        <>
-          <Header />
-          <main className="mx-auto max-w-5xl px-6 py-10">
-            <ErrorState
-              title="Canvas rejected the access token"
-              message="The token in your .env.local came back as unauthorised."
-              hint="Re-generate at canvas.anu.edu.au → Account → Settings → '+ New Access Token', then restart npm run dev."
-            />
-          </main>
-        </>
+        <main className="mx-auto max-w-5xl px-6 py-10">
+          <div className="rounded-2xl border border-anu-border bg-white p-6 text-sm text-red-700">
+            Canvas token rejected (401). Re-generate at canvas.anu.edu.au → Account → Settings → New Token.
+          </div>
+        </main>
       );
     }
     return (
-      <>
-        <Header />
-        <main className="mx-auto max-w-5xl px-6 py-10">
-          <ErrorState
-            title="Couldn't reach Canvas"
-            message={err instanceof Error ? err.message : "Unknown error"}
-          />
-        </main>
-      </>
+      <main className="mx-auto max-w-5xl px-6 py-10">
+        <div className="rounded-2xl border border-anu-border bg-white p-6 text-sm text-red-700">
+          Could not reach Canvas: {err instanceof Error ? err.message : "Unknown error"}
+        </div>
+      </main>
     );
   }
 
-  const enriched = courses.map((c) => {
+  const enriched = courses.map((c, i) => {
     const corpus = studyStore.getCorpus(c.id);
     const progress = studyStore.getProgress(c.id);
     return {
       ...c,
       ingested: !!corpus,
-      ingestedAt: corpus?.ingestedAt ?? null,
       documentsCount: corpus?.documents.length ?? null,
       status: progress.status,
+      color: COURSE_COLORS[i % COURSE_COLORS.length],
     };
   });
 
   return (
     <>
-      <Header studentName={user.name} />
-      <main className="mx-auto max-w-5xl px-6 py-10">
-        <div className="mb-8">
-          <h2 className="text-2xl font-semibold text-anu-ink">Pick a course to study</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-600">
-            This tool reads your Canvas course materials — lecture slides, module pages,
-            assignment briefs — and answers questions or builds practice quizzes grounded
-            in those materials. Pick a course to load its content.
-          </p>
+      <h1 className="screenreader-only">Dashboard</h1>
+      <div id="announcementWrapper" />
+      <header className="ic-Dashboard-header">
+        <div className="ic-Dashboard-header__title-row">
+          <h2 className="ic-Dashboard-header__title">Dashboard</h2>
         </div>
+      </header>
 
-        <ul className="grid gap-4 sm:grid-cols-2">
+      <div id="DashboardCard_Container">
+        <div className="ic-DashboardCard__box">
           {enriched.map((c) => (
-            <li key={c.id}>
-              <Link
-                href={`/study/${c.id}`}
-                className="block rounded-2xl border border-anu-border bg-white p-5 shadow-sm transition hover:border-anu-maroon hover:shadow-md"
-              >
-                <CoursePickerCard
-                  code={c.code}
-                  name={c.name}
-                  ingested={c.ingested}
-                  documentsCount={c.documentsCount}
-                  status={c.status}
-                />
-              </Link>
-            </li>
+            <Link key={c.id} href={`/study/${c.id}`} className="ic-DashboardCard">
+              <div
+                className="ic-DashboardCard__header"
+                style={{ background: c.color }}
+              />
+              <div className="ic-DashboardCard__content">
+                <p className="ic-DashboardCard__course-code">{c.code}</p>
+                <h3 className="ic-DashboardCard__course-name">{c.name}</h3>
+                <p className="ic-DashboardCard__meta">First Semester, 2026</p>
+                <p className="ic-DashboardCard__subtitle">
+                  {c.ingested
+                    ? `✓ Indexed · ${c.documentsCount ?? 0} docs`
+                    : c.status === "running"
+                      ? "Indexing…"
+                      : "Not yet indexed"}
+                </p>
+              </div>
+            </Link>
           ))}
-        </ul>
-
-        <p className="mt-10 text-xs leading-relaxed text-zinc-500">
-          Honest limits: indexes <code className="font-mono">.pdf</code> lecture slides,
-          Canvas page bodies, and assignment briefs. Skips image-only PDFs, .pptx, .docx,
-          .zip, and external links — Canvas doesn't expose these uniformly through the
-          student-token API. The set of ingestable items is course-dependent.
-        </p>
-      </main>
+        </div>
+      </div>
     </>
   );
 }
