@@ -5,7 +5,7 @@ An AI-powered education platform built for the ANU Build-a-thon 2026. Vibeathon 
 ## Features
 
 ### Canvas Shell UI
-A pixel-faithful replica of the Canvas LMS interface built with Tailwind CSS. Includes a course dashboard (with an at-a-glance "judge guide" landing card), calendar, inbox, groups, profile, history, help, and per-course section pages (Announcements, Assignments, Quizzes, Modules, etc.).
+A pixel-faithful replica of the Canvas LMS interface built with Tailwind CSS. Includes a course dashboard, calendar, inbox, groups, profile, history, help, and per-course section pages (Announcements, Assignments, Quizzes, Modules, etc.). A dedicated `/landing` route hosts a guided three-step demo for hackathon judges.
 
 ### Admin Import Control Room (`/admin`)
 Select any Canvas course, preview its numbered teaching weeks and supporting modules, then trigger a selective or full import. Progress streams over SSE in real time (queued → processing → ready) and a fallback poller keeps the status bar fresh. A per-course advisory lock prevents two imports from racing against each other. Legacy manual file upload is also available.
@@ -51,7 +51,8 @@ Extracted text is chunked, embedded with `text-embedding-3-small`, and stored in
 ```
 src/
 ├── app/
-│   ├── page.tsx                          # Dashboard + judge guide landing
+│   ├── page.tsx                          # Dashboard (course cards)
+│   ├── landing/page.tsx                  # Judge demo guide (3-step walkthrough)
 │   ├── admin/page.tsx                    # Canvas import control room
 │   ├── courses/[courseId]/
 │   │   ├── page.tsx                      # Course home
@@ -160,7 +161,7 @@ If you use Supabase, run the migrations under `supabase/migrations/` (via the Su
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The landing page guides you through three steps:
+Open [http://localhost:3000](http://localhost:3000) for the dashboard, or [http://localhost:3000/landing](http://localhost:3000/landing) for the guided three-step demo:
 
 1. Open the featured course (Computer Graphics — fully ingested with real Canvas content).
 2. Try the Study Assistant.

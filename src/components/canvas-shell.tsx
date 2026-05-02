@@ -51,6 +51,10 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
   const [courseMenuOpen, setCourseMenuOpen] = useState(true);
   const [globalNavCollapsed, setGlobalNavCollapsed] = useState(false);
 
+  if (pathname === '/landing' || pathname.startsWith('/landing/')) {
+    return <>{children}</>;
+  }
+
   const toggleCourseMenu = useCallback(() => {
     setCourseMenuOpen((o) => !o);
   }, []);
