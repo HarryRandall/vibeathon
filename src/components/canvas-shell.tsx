@@ -79,6 +79,7 @@ function CanvasShellInner({ pathname, children }: { pathname: string; children: 
   }, [pathname]);
   const isCourseShell = Boolean(activeCourseId);
   const isGlobalShell = !isDashboard && !isCourseShell;
+  const isCourseGradesPage = /^\/courses\/[^/]+\/grades(?:\/|$)/.test(pathname);
 
   const sectionTabs = useMemo(
     () => (activeCourseId ? buildCourseSectionTabs(activeCourseId) : []),
@@ -320,7 +321,7 @@ function CanvasShellInner({ pathname, children }: { pathname: string; children: 
               </div>
             </div>
 
-            {!isAdmin && (
+            {!isAdmin && !isCourseGradesPage && (
               <div id="right-side-wrapper" className="ic-app-main-content__secondary">
                 <aside id="right-side" role="complementary">
                   {(isDashboard || isGlobalShell) && (

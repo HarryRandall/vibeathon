@@ -3,6 +3,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import CanvasModulesList from '@/components/canvas/modules-list';
 import {
+  DEMO_USER,
   getAnnouncementsForCourse,
   getAssignmentsForCourse,
   getDiscussionsForCourse,
@@ -12,6 +13,17 @@ import {
 import { findCourseCard, loadSyncedDashboardCourses } from '@/lib/dashboard-courses-server';
 import { COURSE_CONTENT_SECTIONS, type CourseContentSection } from '@/lib/course-content';
 import { getSupabaseModulesForCourse } from '@/lib/course-modules';
+
+function PrintIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden className="canvas-grades-print-icon">
+      <path
+        d="M5 2.5h10v4H5v-4Zm-1 5h12a2 2 0 0 1 2 2v5h-3v3H5v-3H2v-5a2 2 0 0 1 2-2Zm3 5v3h6v-3H7Zm8-2.75a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
 
 export default async function CourseSectionPage({ params }: { params: { courseId: string; section: string } }) {
   const { courseId, section } = params;
@@ -116,33 +128,57 @@ export default async function CourseSectionPage({ params }: { params: { courseId
           </table>
         </div>,
       );
-    case 'grades':
-      return wrap(
-        'Marks',
-        <div className="ic-table-wrap mt-4 overflow-hidden rounded-lg border border-neutral-200 bg-white">
-          <table className="ic-data-table w-full text-sm">
-            <thead className="bg-neutral-50 text-left">
-              <tr>
-                <th className="px-4 py-3 font-semibold">Assignment</th>
-                <th className="px-4 py-3 font-semibold">Score</th>
-                <th className="px-4 py-3 font-semibold">Submitted / status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {getGradesForCourse(courseId).map((grade, index) => (
-                <tr key={index} className="border-t border-neutral-100">
-                  <td className="px-4 py-3">{grade.assignment}</td>
-                  <td className="px-4 py-3">{grade.score}</td>
-                  <td className="px-4 py-3">{grade.when}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="border-t border-neutral-100 px-4 py-3 text-xs text-neutral-500">
-            Final grades follow ANU policy; provisional marks only until released by the convenor.
-          </p>
-        </div>,
+    case 'grades': {
+      const grades = getGradesForCourse(courseId);
+      return (
+        <div className="user_content canvas-grades-page">
+          <div className="canvas-grades-layout">
+            <div className="canvas-grades-header">
+              <div>
+                <h1 className="canvas-grades-title">Marks for {DEMO_USER.displayName}</h1>
+                <p className="canvas-grades-course-label">
+                  {courseCode} · {courseLabel}
+                </p>
+              </div>
+              <button type="button" className="btn canvas-grades-print-button">
+                <PrintIcon />
+                <span>Print Marks</span>
+              </button>
+            </div>
+
+            <div className="canvas-grades-table-shell">
+              <table className="canvas-grades-table">
+                <colgroup>
+                  <col className="canvas-grades-col-assignment" />
+                  <col className="canvas-grades-col-score" />
+                  <col className="canvas-grades-col-submitted-status" />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th scope="col">Assignment</th>
+                    <th scope="col">Score</th>
+                    <th scope="col">Submitted / status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {grades.map((grade) => (
+                    <tr key={grade.assignment}>
+                      <td>
+                        <Link href={`/courses/${courseId}/assignments`} className="canvas-grades-assignment-link">
+                          {grade.assignment}
+                        </Link>
+                      </td>
+                      <td className="canvas-grades-score">{grade.score}</td>
+                      <td>{grade.when}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       );
+    }
     case 'people':
       return wrap(
         'People',
