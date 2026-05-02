@@ -1,35 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { functionsUrl, getSupabaseAdmin, serviceAuthHeader } from '@/lib/supabase-admin';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { processFiles } from '@/lib/processing/process-file';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
 
-/** Re-runs process-file for every file in the given week. Use when summaries look bad. */
+/** Re-runs the processing pipeline for every file in the given week. */
 export async function POST(_req: NextRequest, { params }: { params: { weekId: string } }) {
-  const supabaseAdmin = getSupabaseAdmin();
-  if (!supabaseAdmin) {
-    return NextResponse.json({ error: 'Backend not configured (set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY).' }, { status: 503 });
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    return NextResponse.json(
+      { error: 'Backend not configured (set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY).' },
+      { status: 503 },
+    );
   }
 
-  const { data: files, error } = await supabaseAdmin
+  const { data: files, error } = await supabase
     .from('course_files')
     .select('id')
     .eq('week_id', params.weekId);
-
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await supabaseAdmin
-    .from('course_files')
-    .update({ status: 'pending', error: null })
-    .eq('week_id', params.weekId);
+  await supabase.from('course_files').update({ status: 'pending', error: null }).eq('week_id', params.weekId);
 
-  for (const f of files ?? []) {
-    fetch(functionsUrl('process-file'), {
-      method: 'POST',
-      headers: { ...serviceAuthHeader(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fileId: f.id, force: true }),
-    }).catch(e => console.error('reprocess dispatch', e));
-  }
+  const summary = await processFiles({
+    supabase,
+    fileIds: (files ?? []).map((f) => f.id),
+    concurrency: 3,
+  });
 
-  return NextResponse.json({ queued: files?.length ?? 0 });
+  return NextResponse.json({ ...summary, queued: files?.length ?? 0 });
 }

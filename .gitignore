@@ -16,6 +16,9 @@ build/
 # vercel
 .vercel
 
+# mcp (contains credentials)
+.mcp.json
+
 # misc
 .DS_Store
 *.pem
