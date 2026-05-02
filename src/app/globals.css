@@ -53,6 +53,10 @@ body {
   z-index: 100;
 }
 
+.ic-app-header--collapsed {
+  width: 54px;
+}
+
 .ic-app-header__main-navigation {
   display: flex;
   flex-direction: column;
@@ -112,6 +116,11 @@ body {
   border-left: 4px solid transparent;
 }
 
+.ic-app-header--collapsed .ic-app-header__menu-list-link {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
 .ic-app-header__menu-list-link:hover {
   background: rgba(255, 255, 255, 0.08);
 }
@@ -122,12 +131,33 @@ body {
 }
 
 .ic-app-header__menu-list-item--active .menu-item__text {
-  color: var(--ic-brand-global-nav-menu-item__text-color--active);
+  color: #fff;
   font-weight: 700;
 }
 
 .ic-app-header__menu-list-item--active .ic-icon-svg {
   fill: var(--ic-brand-global-nav-ic-icon-svg-fill--active);
+}
+
+.ic-app-header--collapsed .menu-item__text {
+  display: none;
+}
+
+.ic-app-header--collapsed .menu-item-icon-container {
+  margin-bottom: 0;
+}
+
+.ic-app-header--collapsed .ic-app-header__logomark img {
+  display: none;
+}
+
+.ic-app-header--collapsed .ic-app-header__logomark {
+  min-height: 36px;
+}
+
+.ic-app-header--collapsed .ic-avatar img {
+  width: 24px;
+  height: 24px;
 }
 
 .menu-item-icon-container {
@@ -163,6 +193,12 @@ body {
 
 .ic-app-header__menu-list-link--nav-toggle .ic-icon-svg {
   fill: #fff;
+}
+
+.ic-app-header__menu-list-link--nav-toggle {
+  width: 100%;
+  border: 0;
+  background: transparent;
 }
 
 .screenreader-only {

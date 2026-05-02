@@ -47,9 +47,14 @@ function globalPageTitle(pathname: string): string {
 export default function CanvasShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [courseMenuOpen, setCourseMenuOpen] = useState(true);
+  const [globalNavCollapsed, setGlobalNavCollapsed] = useState(false);
 
   const toggleCourseMenu = useCallback(() => {
     setCourseMenuOpen((o) => !o);
+  }, []);
+
+  const toggleGlobalNav = useCallback(() => {
+    setGlobalNavCollapsed((collapsed) => !collapsed);
   }, []);
 
   const isDashboard = pathname === '/';
@@ -93,7 +98,7 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
   const sidebarTodos = courseTodos.length ? courseTodos : DEMO_TODOS.slice(0, 3);
 
   return (
-    <div id="application" className="ic-app">
+    <div id="application" className={`ic-app ${globalNavCollapsed ? 'ic-app--global-nav-collapsed' : ''}`}>
       <header id="mobile-header" className="no-print">
         <button type="button" className="mobile-nav-btn" aria-label="Global Navigation Menu">
           <span className="icon-hamburger-bar icon-hamburger-bar--light" />
@@ -106,7 +111,7 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
         </button>
       </header>
 
-      <header id="header" className="ic-app-header no-print" aria-label="Global Header">
+      <header id="header" className={`ic-app-header no-print ${globalNavCollapsed ? 'ic-app-header--collapsed' : ''}`} aria-label="Global Header">
         <a href="#content" id="skip_navigation_link">
           Skip To Content
         </a>
@@ -205,18 +210,18 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
         <div className="ic-app-header__secondary-navigation">
           <ul className="ic-app-header__menu-list">
             <li className="menu-item ic-app-header__menu-list-item">
-              <a
+              <button
                 id="primaryNavToggle"
-                role="button"
-                href="#"
+                type="button"
                 className="ic-app-header__menu-list-link ic-app-header__menu-list-link--nav-toggle"
-                aria-label="Minimise global navigation"
-                title="Minimise global navigation"
+                aria-label={globalNavCollapsed ? 'Expand global navigation' : 'Minimise global navigation'}
+                title={globalNavCollapsed ? 'Expand global navigation' : 'Minimise global navigation'}
+                onClick={toggleGlobalNav}
               >
                 <div className="menu-item-icon-container" aria-hidden>
                   <IconNavToggle className="ic-icon-svg ic-icon-svg--navtoggle" />
                 </div>
-              </a>
+              </button>
             </li>
           </ul>
         </div>
