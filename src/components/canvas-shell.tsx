@@ -16,6 +16,7 @@ import {
   IconStudio,
 } from '@/components/canvas/canvas-icons';
 import { courseHref, DASHBOARD_COURSES, FEATURE_COURSE_ID } from '@/lib/canvas-demo';
+import { DEMO_GROUPS, DEMO_TODOS } from '@/lib/dummy-data';
 
 const ANU_HEADER_LOGO =
   'https://instructure-uploads-apse2.s3.ap-southeast-2.amazonaws.com/account_268700000000000001/attachments/1294/Primary_Horizontal_GoldBlack_v2_200x200.png';
@@ -24,33 +25,42 @@ const CANVAS_AVATAR_PLACEHOLDER = 'https://canvas.anu.edu.au/images/messages/ava
 
 const TERM_LABEL = 'First Semester, 2026';
 
-type SectionTab =
-  | { type: 'link'; label: string; href: string }
-  | { type: 'stub'; label: string };
+type SectionTab = { label: string; href: string };
 
 function buildSectionTabs(courseId: string): SectionTab[] {
   const h = (...segments: string[]) => courseHref(courseId, ...segments);
   return [
-    { type: 'link', label: 'Home', href: h() },
-    { type: 'stub', label: 'Modules' },
-    { type: 'stub', label: 'Announcements' },
-    { type: 'stub', label: 'Discussions' },
-    { type: 'link', label: 'Study Assistant', href: h('assistant') },
-    { type: 'stub', label: 'Class Recordings' },
-    { type: 'link', label: 'Readings', href: h('materials') },
-    { type: 'stub', label: 'Assignments' },
-    { type: 'stub', label: 'Marks' },
-    { type: 'stub', label: 'People' },
-    { type: 'link', label: 'Practice quizzes', href: h('quizzes') },
-    { type: 'stub', label: 'Ed Discussion' },
+    { label: 'Home', href: h() },
+    { label: 'Modules', href: h('modules') },
+    { label: 'Announcements', href: h('announcements') },
+    { label: 'Discussions', href: h('discussions') },
+    { label: 'Study Assistant', href: h('assistant') },
+    { label: 'Class Recordings', href: h('recordings') },
+    { label: 'Readings', href: h('materials') },
+    { label: 'Assignments', href: h('assignments') },
+    { label: 'Marks', href: h('grades') },
+    { label: 'People', href: h('people') },
+    { label: 'Practice quizzes', href: h('quizzes') },
+    { label: 'Ed Discussion', href: h('ed-discussion') },
   ];
 }
 
-/** Course home is exactly `/courses/:id` with no extra segment. */
 function sectionTabActive(pathname: string, href: string) {
   const isCourseHome = /^\/courses\/[^/]+$/.test(href);
   if (isCourseHome) return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function globalPageTitle(pathname: string): string {
+  if (pathname.startsWith('/profile')) return 'Account';
+  if (pathname.startsWith('/calendar')) return 'Calendar';
+  if (pathname.startsWith('/groups')) return 'Groups';
+  if (pathname.startsWith('/inbox')) return 'Inbox';
+  if (pathname.startsWith('/history')) return 'History';
+  if (pathname.startsWith('/studio')) return 'Studio';
+  if (pathname.startsWith('/help')) return 'Help';
+  if (pathname.startsWith('/admin')) return 'Admin upload';
+  return 'Page';
 }
 
 export default function CanvasShell({ children }: { children: ReactNode }) {
@@ -67,6 +77,7 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
     return m?.[1] ?? null;
   }, [pathname]);
   const isCourseShell = Boolean(activeCourseId);
+  const isGlobalShell = !isDashboard && !isCourseShell;
 
   const sectionTabs = useMemo(
     () => (activeCourseId ? buildSectionTabs(activeCourseId) : []),
@@ -76,9 +87,29 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
   const displayCourseCode =
     DASHBOARD_COURSES.find((c) => c.id === activeCourseId)?.courseCode ?? 'COMP4610/COMP8610';
 
+  const globalTitle = globalPageTitle(pathname);
+
   const mobileTitle = isDashboard
     ? 'Dashboard'
-    : DASHBOARD_COURSES.find((c) => c.id === activeCourseId)?.courseCode ?? 'Course';
+    : isCourseShell
+      ? DASHBOARD_COURSES.find((c) => c.id === activeCourseId)?.courseCode ?? 'Course'
+      : globalTitle;
+
+  const navDash = isDashboard;
+  const navCourses = isCourseShell;
+  const navCalendar = pathname.startsWith('/calendar');
+  const navGroups = pathname.startsWith('/groups');
+  const navInbox = pathname.startsWith('/inbox');
+  const navProfile = pathname.startsWith('/profile');
+  const navHistory = pathname.startsWith('/history');
+  const navStudio = pathname.startsWith('/studio');
+  const navHelp = pathname.startsWith('/help');
+
+  const courseTodos = useMemo(
+    () => DEMO_TODOS.filter((t) => t.courseCode === displayCourseCode || t.href.includes(`/courses/${activeCourseId}`)),
+    [displayCourseCode, activeCourseId],
+  );
+  const sidebarTodos = courseTodos.length ? courseTodos : DEMO_TODOS.slice(0, 3);
 
   return (
     <div id="application" className="ic-app">
@@ -106,8 +137,8 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
             </Link>
           </div>
           <ul id="menu" className="ic-app-header__menu-list">
-            <li className="menu-item ic-app-header__menu-list-item">
-              <a id="global_nav_profile_link" role="button" href="#" className="ic-app-header__menu-list-link">
+            <li className={`menu-item ic-app-header__menu-list-item ${navProfile ? 'ic-app-header__menu-list-item--active' : ''}`}>
+              <Link id="global_nav_profile_link" href="/profile" className="ic-app-header__menu-list-link">
                 <div className="menu-item-icon-container">
                   <div aria-hidden className="fs-exclude ic-avatar">
                     <img src={CANVAS_AVATAR_PLACEHOLDER} alt="Account" />
@@ -115,22 +146,22 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
                   <span className="menu-item__badge" />
                 </div>
                 <div className="menu-item__text">Account</div>
-              </a>
+              </Link>
             </li>
-            <li className={`ic-app-header__menu-list-item ${isDashboard ? 'ic-app-header__menu-list-item--active' : ''}`}>
-              <Link id="global_nav_dashboard_link" href="/" className="ic-app-header__menu-list-link" aria-current={isDashboard ? 'page' : undefined}>
+            <li className={`ic-app-header__menu-list-item ${navDash ? 'ic-app-header__menu-list-item--active' : ''}`}>
+              <Link id="global_nav_dashboard_link" href="/" className="ic-app-header__menu-list-link" aria-current={navDash ? 'page' : undefined}>
                 <div className="menu-item-icon-container" aria-hidden>
                   <IconDashboard className="ic-icon-svg ic-icon-svg--dashboard" />
                 </div>
                 <div className="menu-item__text">Dashboard</div>
               </Link>
             </li>
-            <li className={`menu-item ic-app-header__menu-list-item ${isCourseShell ? 'ic-app-header__menu-list-item--active' : ''}`}>
+            <li className={`menu-item ic-app-header__menu-list-item ${navCourses ? 'ic-app-header__menu-list-item--active' : ''}`}>
               <Link
                 id="global_nav_courses_link"
                 href={`/courses/${FEATURE_COURSE_ID}`}
                 className="ic-app-header__menu-list-link"
-                aria-current={isCourseShell ? 'page' : undefined}
+                aria-current={navCourses ? 'page' : undefined}
               >
                 <div className="menu-item-icon-container" aria-hidden>
                   <IconCourses className="ic-icon-svg ic-icon-svg--courses" />
@@ -138,55 +169,55 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
                 <div className="menu-item__text">Courses</div>
               </Link>
             </li>
-            <li className="menu-item ic-app-header__menu-list-item">
-              <a id="global_nav_groups_link" role="button" href="#" className="ic-app-header__menu-list-link">
+            <li className={`menu-item ic-app-header__menu-list-item ${navGroups ? 'ic-app-header__menu-list-item--active' : ''}`}>
+              <Link id="global_nav_groups_link" href="/groups" className="ic-app-header__menu-list-link">
                 <div className="menu-item-icon-container" aria-hidden>
                   <IconGroups className="ic-icon-svg ic-icon-svg--groups" />
                 </div>
                 <div className="menu-item__text">Groups</div>
-              </a>
+              </Link>
             </li>
-            <li className="menu-item ic-app-header__menu-list-item">
-              <a id="global_nav_calendar_link" href="#" className="ic-app-header__menu-list-link">
+            <li className={`menu-item ic-app-header__menu-list-item ${navCalendar ? 'ic-app-header__menu-list-item--active' : ''}`}>
+              <Link id="global_nav_calendar_link" href="/calendar" className="ic-app-header__menu-list-link">
                 <div className="menu-item-icon-container" aria-hidden>
                   <IconCalendar className="ic-icon-svg ic-icon-svg--calendar" />
                 </div>
                 <div className="menu-item__text">Calendar</div>
-              </a>
+              </Link>
             </li>
-            <li className="menu-item ic-app-header__menu-list-item">
-              <a id="global_nav_conversations_link" href="#" className="ic-app-header__menu-list-link">
+            <li className={`menu-item ic-app-header__menu-list-item ${navInbox ? 'ic-app-header__menu-list-item--active' : ''}`}>
+              <Link id="global_nav_conversations_link" href="/inbox" className="ic-app-header__menu-list-link">
                 <div className="menu-item-icon-container">
                   <IconInbox className="ic-icon-svg ic-icon-svg--inbox" />
                   <span className="menu-item__badge" />
                 </div>
                 <div className="menu-item__text">Inbox</div>
-              </a>
+              </Link>
             </li>
-            <li className="menu-item ic-app-header__menu-list-item">
-              <a id="global_nav_history_link" role="button" href="#" className="ic-app-header__menu-list-link">
+            <li className={`menu-item ic-app-header__menu-list-item ${navHistory ? 'ic-app-header__menu-list-item--active' : ''}`}>
+              <Link id="global_nav_history_link" href="/history" className="ic-app-header__menu-list-link">
                 <div className="menu-item-icon-container" aria-hidden>
                   <IconHistory className="ic-icon-svg menu-item__icon svg-icon-history" />
                 </div>
                 <div className="menu-item__text">History</div>
-              </a>
+              </Link>
             </li>
-            <li className="globalNavExternalTool menu-item ic-app-header__menu-list-item">
-              <a className="ic-app-header__menu-list-link" href="#">
+            <li className={`globalNavExternalTool menu-item ic-app-header__menu-list-item ${navStudio ? 'ic-app-header__menu-list-item--active' : ''}`}>
+              <Link className="ic-app-header__menu-list-link" href="/studio">
                 <div className="menu-item-icon-container" aria-hidden>
                   <IconStudio className="ic-icon-svg ic-icon-svg--lti menu-item__icon" />
                 </div>
                 <div className="menu-item__text">Studio</div>
-              </a>
+              </Link>
             </li>
-            <li className="ic-app-header__menu-list-item">
-              <a id="global_nav_help_link" role="button" className="ic-app-header__menu-list-link" href="#">
+            <li className={`ic-app-header__menu-list-item ${navHelp ? 'ic-app-header__menu-list-item--active' : ''}`}>
+              <Link id="global_nav_help_link" href="/help" className="ic-app-header__menu-list-link">
                 <div className="menu-item-icon-container" role="presentation">
                   <IconHelp className="ic-icon-svg menu-item__icon svg-icon-help" />
                   <span className="menu-item__badge" />
                 </div>
                 <div className="menu-item__text">Help</div>
-              </a>
+              </Link>
             </li>
           </ul>
         </div>
@@ -213,18 +244,21 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
       <div id="wrapper" className="ic-Layout-wrapper">
         {!isDashboard && (
           <div className="ic-app-nav-toggle-and-crumbs no-print">
-            <button
-              type="button"
-              id="courseMenuToggle"
-              className="ic-app-course-nav-toggle"
-              aria-live="polite"
-              aria-label={courseMenuOpen ? 'Hide Courses Navigation Menu' : 'Show Courses Navigation Menu'}
-              onClick={toggleCourseMenu}
-            >
-              <span className="icon-hamburger-bar" />
-              <span className="icon-hamburger-bar" />
-              <span className="icon-hamburger-bar" />
-            </button>
+            {isCourseShell && (
+              <button
+                type="button"
+                id="courseMenuToggle"
+                className="ic-app-course-nav-toggle"
+                aria-live="polite"
+                aria-label={courseMenuOpen ? 'Hide Courses Navigation Menu' : 'Show Courses Navigation Menu'}
+                onClick={toggleCourseMenu}
+              >
+                <span className="icon-hamburger-bar" />
+                <span className="icon-hamburger-bar" />
+                <span className="icon-hamburger-bar" />
+              </button>
+            )}
+            {!isCourseShell && <span className="ic-app-nav-toggle-spacer" aria-hidden />}
 
             <div className="ic-app-crumbs ic-app-crumbs-enhanced-rubrics">
               <nav id="breadcrumbs" role="navigation" aria-label="breadcrumbs">
@@ -237,11 +271,17 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
                       </span>
                     </Link>
                   </li>
-                  <li id="crumb_course_demo" aria-current="page">
-                    <Link href={activeCourseId ? `/courses/${activeCourseId}` : '/'}>
-                      <span className="ellipsible">{displayCourseCode}</span>
-                    </Link>
-                  </li>
+                  {isCourseShell ? (
+                    <li id="crumb_course_demo" aria-current="page">
+                      <Link href={activeCourseId ? `/courses/${activeCourseId}` : '/'}>
+                        <span className="ellipsible">{displayCourseCode}</span>
+                      </Link>
+                    </li>
+                  ) : (
+                    <li aria-current="page">
+                      <span className="ellipsible">{globalTitle}</span>
+                    </li>
+                  )}
                 </ol>
               </nav>
             </div>
@@ -260,15 +300,6 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
                 <nav role="navigation" aria-label="Courses Navigation Menu">
                   <ul id="section-tabs">
                     {sectionTabs.map((tab) => {
-                      if (tab.type === 'stub') {
-                        return (
-                          <li key={tab.label} className="section">
-                            <a href="#" onClick={(e) => e.preventDefault()}>
-                              {tab.label}
-                            </a>
-                          </li>
-                        );
-                      }
                       const active = sectionTabActive(pathname, tab.href);
                       return (
                         <li key={tab.href} className="section">
@@ -291,8 +322,12 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
                   <div id="dashboard" className="ic-dashboard-app">
                     {children}
                   </div>
-                ) : (
+                ) : isCourseShell ? (
                   <div id="course_home_content">
+                    <div id="wiki_page_show">{children}</div>
+                  </div>
+                ) : (
+                  <div id="global_content" className="ic-global-main">
                     <div id="wiki_page_show">{children}</div>
                   </div>
                 )}
@@ -301,31 +336,59 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
 
             <div id="right-side-wrapper" className="ic-app-main-content__secondary">
               <aside id="right-side" role="complementary">
-                {isDashboard ? (
-                  <div className="placeholder ic-dashboard-sidebar-placeholder" />
-                ) : (
+                {(isDashboard || isGlobalShell) && (
+                  <div className="ic-sidebar-todo-block">
+                    <h2 className="ic-sidebar-h2">To Do</h2>
+                    <ul className="ic-todo-list">
+                      {DEMO_TODOS.map((t) => (
+                        <li key={t.id} className="ic-todo-item">
+                          <Link href={t.href} className="ic-todo-link">
+                            <span className="ic-todo-course">{t.courseCode}</span>
+                            <span className="ic-todo-title">{t.title}</span>
+                            <span className="ic-todo-meta">
+                              {t.dueLabel} · {t.points} pts
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="ic-sidebar-note">Demo data — connect Canvas API for live assignments.</p>
+                  </div>
+                )}
+
+                {isCourseShell && (
                   <div id="course_show_secondary">
                     <div className="course-options">
-                      <a id="view_course_stream_btn" className="btn button-sidebar-wide" href="#">
+                      <Link id="view_course_stream_btn" className="btn button-sidebar-wide" href={`/courses/${activeCourseId}/announcements`}>
                         View Course Stream
-                      </a>
+                      </Link>
                     </div>
-                    <a className="btn button-sidebar-wide" href="#">
+                    <Link className="btn button-sidebar-wide" href="/calendar">
                       View Course Calendar
-                    </a>
-                    <a id="view_course_notifications_btn" className="btn button-sidebar-wide" href="#">
+                    </Link>
+                    <Link id="view_course_notifications_btn" className="btn button-sidebar-wide" href={`/courses/${activeCourseId}/announcements`}>
                       View Course Notifications
-                    </a>
+                    </Link>
 
-                    <div className="todo-list Sidebar__TodoListContainer ic-sidebar-muted">
-                      <p>To Do list loads here in Canvas.</p>
-                    </div>
+                    <h2 className="ic-sidebar-h2">To Do</h2>
+                    <ul className="ic-todo-list">
+                      {sidebarTodos.map((t) => (
+                        <li key={t.id} className="ic-todo-item">
+                          <Link href={t.href} className="ic-todo-link">
+                            <span className="ic-todo-title">{t.title}</span>
+                            <span className="ic-todo-meta">{t.dueLabel}</span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
 
-                    <h2>Course Groups</h2>
+                    <h2 className="ic-sidebar-h2">Course Groups</h2>
                     <ul className="unstyled_list group_list">
-                      <li>
-                        <a href="#">Team “Gundam”</a>
-                      </li>
+                      {DEMO_GROUPS.slice(0, 4).map((g) => (
+                        <li key={g.id}>
+                          <Link href={g.href}>{g.name}</Link>
+                        </li>
+                      ))}
                     </ul>
 
                     <div className="events_list recent_feedback">
@@ -334,7 +397,7 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
                       </div>
                       <ul className="right-side-list events">
                         <li className="event">
-                          <a href="#" className="recent_feedback_icon">
+                          <Link href={`/courses/${FEATURE_COURSE_ID}/grades`} className="recent_feedback_icon">
                             <i className="icon-check">✓</i>
                             <div className="event-details">
                               <b className="event-details__title recent_feedback_title">C-Lab-2 submission site</b>
@@ -346,7 +409,7 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
                                 Task1: excellent · Task2: shading discussion could be deeper · Task3: excellent…
                               </p>
                             </div>
-                          </a>
+                          </Link>
                         </li>
                       </ul>
                     </div>
@@ -361,7 +424,7 @@ export default function CanvasShell({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        {isDashboard && (
+        {(isDashboard || isGlobalShell) && (
           <footer role="contentinfo" id="footer" className="ic-app-footer">
             <a href="http://www.instructure.com" className="footer-logo ic-app-footer__logo-link" target="_blank" rel="noreferrer">
               <span className="screenreader-only">By Instructure</span>

@@ -34,10 +34,12 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
-      <div className="w-full max-w-md bg-white rounded-xl shadow p-8">
-        <h1 className="text-2xl font-bold mb-1">Admin upload</h1>
-        <p className="text-sm text-gray-500 mb-6">Testing-only route — no auth.</p>
+    <div className="user_content">
+      <h1 className="ic-page-h1">Admin upload</h1>
+      <p className="mt-2 max-w-xl text-sm text-neutral-600">Testing-only route — no auth. Uses the same Canvas shell as the rest of the demo.</p>
+      <div className="mx-auto mt-8 w-full max-w-md rounded-xl border border-neutral-200 bg-white p-8 shadow-sm">
+        <h2 className="text-lg font-semibold text-neutral-900">Upload a document</h2>
+        <p className="mt-1 text-sm text-neutral-500 mb-6">Files are processed by the configured backend when present.</p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div
             className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-400 transition-colors"
@@ -71,6 +73,6 @@ export default function AdminPage() {
           </button>
         </form>
       </div>
-    </main>
+    </div>
   );
 }

@@ -1,24 +1,98 @@
 import Link from 'next/link';
 import { courseHref, DASHBOARD_COURSES, FEATURE_COURSE_ID } from '@/lib/canvas-demo';
+import { getCourseMeta, getModulesForCourse } from '@/lib/dummy-data';
 
-/** Full wiki-style home for the demo feature course; other IDs get a short stub. */
+/** Full wiki-style home for the demo feature course; other dashboard courses get a rich dummy home. */
 export default function CourseHomePage({ params }: { params: { courseId: string } }) {
   const courseId = params.courseId;
-  const meta = DASHBOARD_COURSES.find((c) => c.id === courseId);
+  const meta = getCourseMeta(courseId);
+
+  if (courseId !== FEATURE_COURSE_ID && meta) {
+    const modules = getModulesForCourse(courseId);
+    const mod = courseHref(courseId, 'modules');
+    const assist = courseHref(courseId, 'assistant');
+
+    return (
+      <div className="user_content">
+        <div className="mb-6 rounded border border-neutral-200 bg-white px-4 py-6 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{meta.term}</p>
+          <h1 className="ic-page-h1 mt-1">{meta.shortName}</h1>
+          <p className="mt-2 text-sm text-neutral-600">
+            {meta.courseCode} · {meta.subtitle}
+          </p>
+        </div>
+
+        <h2>Course overview</h2>
+        <p className="text-sm leading-relaxed text-neutral-700">
+          Full Study Assistant wiring is showcased in{' '}
+          <Link href={`/courses/${FEATURE_COURSE_ID}`} className="text-[#146ebd] underline">
+            Computer Graphics
+          </Link>
+          . This course uses the same shell with demo modules, announcements, and grades populated from sample data.
+        </p>
+
+        <h2>Quick links</h2>
+        <ul style={{ listStyleType: 'disc' }}>
+          <li>
+            <Link href={mod}>Modules</Link>
+          </li>
+          <li>
+            <Link href={courseHref(courseId, 'announcements')}>Announcements</Link>
+          </li>
+          <li>
+            <Link href={courseHref(courseId, 'discussions')}>Discussions</Link>
+          </li>
+          <li>
+            <Link href={courseHref(courseId, 'assignments')}>Assignments</Link>
+          </li>
+          <li>
+            <Link href={courseHref(courseId, 'grades')}>Marks</Link>
+          </li>
+          <li>
+            <Link href={courseHref(courseId, 'people')}>People</Link>
+          </li>
+          <li>
+            <Link href={assist}>Study Assistant</Link> (demo)
+          </li>
+        </ul>
+
+        <h2>Modules snapshot</h2>
+        <div className="ic-table-wrap mt-3 overflow-hidden rounded-lg border border-neutral-200 bg-white">
+          <table className="ic-data-table w-full text-sm">
+            <thead className="bg-neutral-50">
+              <tr>
+                <th className="px-4 py-2 text-left font-semibold">Module</th>
+                <th className="px-4 py-2 text-left font-semibold">Items</th>
+                <th className="px-4 py-2 text-left font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {modules.map((m) => (
+                <tr key={m.id} className="border-t border-neutral-100">
+                  <td className="px-4 py-3">
+                    <Link href={mod} className="text-[#146ebd] hover:underline">
+                      {m.name}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3">{m.items}</td>
+                  <td className="px-4 py-3 capitalize">{m.state}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
 
   if (courseId !== FEATURE_COURSE_ID) {
     return (
       <div className="user_content">
-        <h2>{meta?.shortName ?? 'Course'}</h2>
-        <p className="text-sm leading-relaxed text-neutral-700">
-          This prototype wires the full course shell and study tools for{' '}
-          <strong>Computer Graphics ({FEATURE_COURSE_ID})</strong> only.
+        <h1 className="ic-page-h1">Course</h1>
+        <p className="mt-2 text-sm text-neutral-700">
+          No demo card exists for course ID <code className="rounded bg-neutral-100 px-1">{courseId}</code>.
         </p>
         <p className="mt-4 text-sm">
-          <Link href={`/courses/${FEATURE_COURSE_ID}`} className="text-[#146ebd] underline">
-            Open Computer Graphics
-          </Link>{' '}
-          ·{' '}
           <Link href="/" className="text-[#146ebd] underline">
             Back to Dashboard
           </Link>
@@ -30,6 +104,9 @@ export default function CourseHomePage({ params }: { params: { courseId: string 
   const ass = courseHref(courseId, 'assistant');
   const mat = courseHref(courseId, 'materials');
   const qui = courseHref(courseId, 'quizzes');
+  const modulesLink = courseHref(courseId, 'modules');
+  const peopleLink = courseHref(courseId, 'people');
+  const assignmentsLink = courseHref(courseId, 'assignments');
 
   return (
     <div className="user_content">
@@ -40,20 +117,20 @@ export default function CourseHomePage({ params }: { params: { courseId: string 
       <h2>How to engage with this course</h2>
       <ul style={{ listStyleType: 'disc' }}>
         <li>
-          Read your <Link href="#">Class summary</Link> and the <Link href="#">Course contacts</Link>
+          Read your <Link href={modulesLink}>Class summary</Link> and the <Link href={peopleLink}>Course contacts</Link>
         </li>
         <li>
-          Read <Link href="#">Course Outline</Link>.
+          Read <Link href={modulesLink}>Course Outline</Link>.
         </li>
         <li>
-          Get familiar with the information in the <Link href="#">Course information</Link> module
+          Get familiar with the information in the <Link href={modulesLink}>Course information</Link> module
         </li>
         <li>Check Announcements and Discussions regularly</li>
         <li>
-          Engage with course content for each week or topic in the <Link href="#">Modules</Link>
+          Engage with course content for each week or topic in the <Link href={modulesLink}>Modules</Link>
         </li>
         <li>
-          Check your <Link href="#">Assessments</Link> regularly
+          Check your <Link href={assignmentsLink}>Assessments</Link> regularly
         </li>
       </ul>
 
@@ -73,8 +150,8 @@ export default function CourseHomePage({ params }: { params: { courseId: string 
 
       <h2>Course schedule</h2>
       <p style={{ fontSize: '12pt', color: '#000000', lineHeight: '25px' }}>
-        The following table gives you information and links to what you will be doing each week. Please note: The
-        content of each module might not be available until just before it is due to begin.
+        The following table gives you information and links to what you will be doing each week. Please note: The content of
+        each module might not be available until just before it is due to begin.
       </p>
 
       <table style={{ borderCollapse: 'collapse', width: '98%', borderColor: '#be830e' }} border={3}>
@@ -134,8 +211,7 @@ export default function CourseHomePage({ params }: { params: { courseId: string 
       <h2>Smart study assistant</h2>
       <p>
         Open the integrated tool from the course menu: <Link href={ass}>Study Assistant</Link> — summaries, Q&amp;A,{' '}
-        <Link href={mat}>readings index</Link>, and <Link href={qui}>practice quizzes</Link> when your materials are
-        synced.
+        <Link href={mat}>readings index</Link>, and <Link href={qui}>practice quizzes</Link> when your materials are synced.
       </p>
 
       <h2>Academic integrity</h2>

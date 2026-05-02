@@ -704,3 +704,112 @@ body {
     padding: 16px;
   }
 }
+
+/* Global shell main + shared utility blocks */
+.ic-global-main {
+  min-height: 40vh;
+}
+
+.ic-page-h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--ic-brand-font-color-dark);
+}
+
+.ic-table-wrap {
+  border-radius: 8px;
+}
+
+.ic-data-table {
+  border-collapse: collapse;
+}
+
+.ic-data-table th,
+.ic-data-table td {
+  vertical-align: top;
+}
+
+.ic-profile-grid {
+  box-sizing: border-box;
+}
+
+.ic-app-nav-toggle-spacer {
+  display: inline-block;
+  width: 44px;
+  flex-shrink: 0;
+}
+
+.section-tab-disabled {
+  display: block;
+  padding: 8px 12px;
+  color: #999;
+  cursor: not-allowed;
+}
+
+.ic-sidebar-todo-block {
+  margin-bottom: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.ic-sidebar-h2 {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 10px;
+  color: var(--ic-brand-font-color-dark);
+}
+
+.ic-todo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ic-todo-item {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.ic-todo-item:last-child {
+  border-bottom: none;
+}
+
+.ic-todo-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+.ic-todo-link:hover .ic-todo-title {
+  color: var(--ic-link-color);
+}
+
+.ic-todo-course {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 2px;
+}
+
+.ic-todo-title {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ic-link-color);
+}
+
+.ic-todo-meta {
+  display: block;
+  font-size: 11px;
+  color: #666;
+  margin-top: 4px;
+}
+
+.ic-sidebar-note {
+  font-size: 11px;
+  color: #888;
+  margin: 12px 0 0;
+}

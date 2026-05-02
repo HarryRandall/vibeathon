@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'node:path';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 const BUCKET = 'documents';
-
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false } },
-);
 
 const TEXT_MIME_PREFIXES = ['text/', 'application/json', 'application/xml'];
 
@@ -17,7 +11,10 @@ function isTextLike(mime: string | null) {
   return TEXT_MIME_PREFIXES.some(p => mime.startsWith(p));
 }
 
-async function extractTitle(doc: { name: string; mime_type: string | null; storage_path: string }) {
+async function extractTitle(
+  supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  doc: { name: string; mime_type: string | null; storage_path: string },
+) {
   const fallback = path.parse(doc.name ?? path.basename(doc.storage_path)).name;
   if (!isTextLike(doc.mime_type)) return fallback;
 
@@ -30,6 +27,11 @@ async function extractTitle(doc: { name: string; mime_type: string | null; stora
 }
 
 export async function POST(request: NextRequest) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    return NextResponse.json({ error: 'Backend not configured (set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY).' }, { status: 503 });
+  }
+
   const { document_id } = await request.json();
   if (!document_id) {
     return NextResponse.json({ error: 'document_id required' }, { status: 400 });
@@ -45,7 +47,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: fetchError?.message ?? 'not found' }, { status: 404 });
   }
 
-  const title = await extractTitle(doc);
+  const title = await extractTitle(supabase, doc);
 
   const { error: updateError } = await supabase
     .from('documents')
