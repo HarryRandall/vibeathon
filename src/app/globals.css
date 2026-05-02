@@ -1083,6 +1083,62 @@ body {
   gap: 10px;
 }
 
+.admin-status-bar {
+  background: linear-gradient(180deg, #fffdf7 0%, #fff8eb 100%);
+  border: 1px solid #e4c375;
+  border-radius: 16px;
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 14px;
+}
+
+.admin-status-bar__row {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-status-bar__label {
+  color: #2d2414;
+  font-weight: 700;
+}
+
+.admin-status-bar__meta {
+  color: #876528;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-status-bar__track {
+  background: #f4e7c8;
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.admin-status-bar__fill {
+  background: linear-gradient(90deg, #d8a432 0%, #be830e 100%);
+  display: block;
+  height: 100%;
+  transition: width 240ms ease;
+}
+
+.admin-status-bar__chips {
+  color: #675130;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.admin-status-bar__chips span {
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
 .admin-week-panel {
   border-top: 1px solid #efe5d2;
   margin-top: 20px;
@@ -1101,6 +1157,13 @@ body {
   color: #2d2a24;
   font-size: 15px;
   margin: 0;
+}
+
+.admin-week-panel__lede {
+  color: #786c5d;
+  font-size: 13px;
+  margin: 6px 0 0;
+  max-width: 62ch;
 }
 
 .admin-week-panel__header button {
@@ -1144,6 +1207,42 @@ body {
   font-size: 12px;
 }
 
+.admin-supporting-modules {
+  border-top: 1px solid #efe5d2;
+  margin-top: 18px;
+  padding-top: 16px;
+}
+
+.admin-supporting-modules h4 {
+  color: #2d2a24;
+  font-size: 13px;
+  margin: 0 0 10px;
+}
+
+.admin-supporting-modules ul {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-supporting-modules li {
+  align-items: center;
+  background: #fffdfa;
+  border: 1px solid #e8dfcf;
+  border-radius: 10px;
+  color: #2d2a24;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.admin-supporting-modules small {
+  color: #756b5d;
+}
+
 .admin-import-alert {
   background: #fff8e8;
   border: 1px solid #e4c375;
@@ -1161,6 +1260,8 @@ body {
 
 .admin-manual-upload {
   max-width: 760px;
+  margin-top: 4px;
+  opacity: 0.96;
 }
 
 .admin-file-drop {

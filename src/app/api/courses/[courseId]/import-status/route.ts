@@ -28,9 +28,20 @@ export async function GET(_req: Request, { params }: { params: { courseId: strin
     return NextResponse.json({ error: weeksError?.message ?? filesError?.message }, { status: 500 });
   }
 
+  const fileRows = files ?? [];
+  const activeFile = fileRows.find((file) => file.status === 'processing' || file.status === 'pending') ?? fileRows[0] ?? null;
+
   return NextResponse.json({
     courseId,
     weeks: weeks ?? [],
-    files: files ?? [],
+    files: fileRows,
+    activeFile: activeFile
+      ? {
+          id: activeFile.id,
+          name: activeFile.name,
+          status: activeFile.status,
+          kind: activeFile.kind,
+        }
+      : null,
   });
 }
