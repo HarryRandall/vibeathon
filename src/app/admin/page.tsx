@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 type ImportStatus = {
   imported: boolean;
@@ -30,6 +30,7 @@ type CourseWeeks = {
 };
 
 type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
+type ImportPhase = 'idle' | 'importing' | 'success' | 'error';
 
 function statusCopy(status: ImportStatus) {
   if (!status?.imported) return 'Not imported';
@@ -59,7 +60,7 @@ async function readJsonResponse<T>(res: Response): Promise<T & { error?: string;
 function weekLabel(weekNumber: number, title: string | null) {
   if (!title) return `Week ${weekNumber}`;
   if (/^week\s*\d+/i.test(title.trim())) return title;
-  return `Week ${weekNumber} · ${title}`;
+  return `Week ${weekNumber} - ${title}`;
 }
 
 export default function AdminPage() {
@@ -71,7 +72,7 @@ export default function AdminPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [isPending, startTransition] = useTransition();
+  const [importPhase, setImportPhase] = useState<ImportPhase>('idle');
 
   const [file, setFile] = useState<File | null>(null);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
@@ -82,8 +83,8 @@ export default function AdminPage() {
     [courses, selectedCourseId],
   );
 
-  async function loadCourses() {
-    setLoading(true);
+  async function loadCourses(silent = false) {
+    if (!silent) setLoading(true);
     setError('');
     try {
       const res = await fetch('/api/courses/list-canvas', { cache: 'no-store' });
@@ -94,27 +95,27 @@ export default function AdminPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
 
-  async function loadDetails(courseId: number) {
-    setDetails(null);
-    setSelectedWeeks(new Set());
+  async function loadDetails(courseId: number, resetSelection = true) {
+    if (resetSelection) {
+      setDetails(null);
+      setSelectedWeeks(new Set());
+    }
+
     let importedWeeks: CourseWeeks['weeks'] = [];
     let importedFiles: CourseWeeks['files'] = [];
+
     try {
       const res = await fetch(`/api/courses/${courseId}/import-status`, { cache: 'no-store' });
       const data = await readJsonResponse<CourseWeeks>(res);
       if (!res.ok) throw new Error(data.error ?? 'Could not load imported weeks');
       importedWeeks = data.weeks ?? [];
       importedFiles = data.files ?? [];
-      setDetails({
-        ...data,
-        weeks: importedWeeks,
-        files: importedFiles,
-      });
-      setSelectedWeeks(new Set(importedWeeks.map((week) => week.week_number)));
+      setDetails({ ...data, weeks: importedWeeks, files: importedFiles });
+      if (resetSelection) setSelectedWeeks(new Set(importedWeeks.map((week) => week.week_number)));
     } catch (err) {
       setDetails({ courseId: String(courseId), weeks: [], files: [] });
       setMessage(err instanceof Error ? err.message : String(err));
@@ -131,9 +132,11 @@ export default function AdminPage() {
         weeks: data.weeks ?? [],
         supportingModules: data.supportingModules ?? [],
       });
-      setSelectedWeeks(new Set((data.weeks ?? []).map((week: CourseWeeks['weeks'][number]) => week.week_number)));
+      if (resetSelection) {
+        setSelectedWeeks(new Set((data.weeks ?? []).map((week: CourseWeeks['weeks'][number]) => week.week_number)));
+      }
     } catch {
-      // Existing imports can still be synced even if Canvas module preview fails.
+      // The imported status still works if Canvas module preview fails.
     }
   }
 
@@ -149,38 +152,39 @@ export default function AdminPage() {
     if (!selectedCourse) return;
     const interval = window.setInterval(() => {
       setRefreshing(true);
-      void Promise.all([loadCourses(), loadDetails(selectedCourse.id)]).finally(() => setRefreshing(false));
-    }, 8000);
+      void Promise.all([loadCourses(true), loadDetails(selectedCourse.id, false)]).finally(() => setRefreshing(false));
+    }, selectedCourse.importStatus?.processingFiles ? 3000 : 8000);
     return () => window.clearInterval(interval);
-  }, [selectedCourse?.id]);
+  }, [selectedCourse?.id, selectedCourse?.importStatus?.processingFiles]);
 
   async function importCourse(allWeeks: boolean) {
     if (!selectedCourse) return;
     setError('');
-    setMessage(`Starting import for ${selectedCourse.course_code || selectedCourse.name}...`);
+    setMessage('');
+    setImportPhase('importing');
 
-    const body = {
-      canvasCourseId: selectedCourse.id,
-      localCourseId: String(selectedCourse.id),
-      weekNumbers: allWeeks ? undefined : Array.from(selectedWeeks),
-    };
+    try {
+      const res = await fetch('/api/courses/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          canvasCourseId: selectedCourse.id,
+          localCourseId: String(selectedCourse.id),
+          weekNumbers: allWeeks ? undefined : Array.from(selectedWeeks),
+        }),
+      });
+      const data = await readJsonResponse<{ newFiles?: number; skippedExisting?: number; failures?: { source: string; error: string }[] }>(res);
+      if (!res.ok) throw new Error(data.error ?? data.message ?? 'Import failed');
 
-    startTransition(async () => {
-      try {
-        const res = await fetch('/api/courses/import', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        const data = await readJsonResponse<{ newFiles?: number; skippedExisting?: number }>(res);
-        if (!res.ok) throw new Error(data.error ?? data.message ?? 'Import failed');
-        setMessage(`Imported ${data.newFiles} new source(s); ${data.skippedExisting ?? 0} already existed. Processing continues in the background.`);
-        await loadCourses();
-        await loadDetails(selectedCourse.id);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    });
+      const failureText = data.failures?.length ? ` ${data.failures.length} source(s) failed; check logs/details.` : '';
+      setMessage(`Queued ${data.newFiles ?? 0} new source(s); ${data.skippedExisting ?? 0} already existed.${failureText}`);
+      setImportPhase('success');
+      await loadCourses();
+      await loadDetails(selectedCourse.id, false);
+    } catch (err) {
+      setImportPhase('error');
+      setError(err instanceof Error ? err.message : String(err));
+    }
   }
 
   async function handleUpload(e: React.FormEvent) {
@@ -209,46 +213,52 @@ export default function AdminPage() {
 
   const weekOptions = details?.weeks ?? [];
   const supportingModules = details?.supportingModules ?? [];
+  const sourceRows = details?.files.slice(0, 8) ?? [];
   const selectedWeekCount = selectedWeeks.size;
   const activeFile = details?.activeFile ?? null;
+  const importBusy = importPhase === 'importing';
   const statusText = selectedCourse
-    ? activeFile?.status === 'processing'
-      ? `Processing ${activeFile.name}`
-      : selectedCourse.importStatus?.processingFiles
-        ? `Processing ${selectedCourse.importStatus.processingFiles} source(s)`
-        : activeFile?.status === 'pending'
-          ? `Queued ${activeFile.name}`
-          : selectedCourse.importStatus?.readyFiles
-            ? `Ready: ${selectedCourse.importStatus.readyFiles} processed source(s)`
-            : selectedCourse.importStatus?.imported
-              ? 'Imported, awaiting processing'
-              : 'Not imported yet'
+    ? importBusy
+      ? `Importing ${selectedCourse.course_code || selectedCourse.name}`
+      : activeFile?.status === 'processing'
+        ? `Processing ${activeFile.name}`
+        : selectedCourse.importStatus?.processingFiles
+          ? `Processing ${selectedCourse.importStatus.processingFiles} source(s)`
+          : activeFile?.status === 'pending'
+            ? `Queued ${activeFile.name}`
+            : selectedCourse.importStatus?.readyFiles
+              ? `Ready: ${selectedCourse.importStatus.readyFiles} processed source(s)`
+              : selectedCourse.importStatus?.imported
+                ? 'Imported, awaiting processing'
+                : 'Not imported yet'
     : 'Select a course';
   const progressValue = selectedCourse?.importStatus?.filesCount
     ? Math.min(100, Math.round((selectedCourse.importStatus.readyFiles / selectedCourse.importStatus.filesCount) * 100))
     : 0;
 
   return (
-    <div className="user_content admin-import-page">
-      <section className="canvas-hero admin-import-hero">
-        <div className="canvas-hero__copy">
-          <p className="canvas-hero__eyebrow">Course import</p>
-          <h1 className="ic-page-h1 canvas-hero__title">Canvas content control room</h1>
-          <p className="canvas-hero__summary">
-            Import each course once, then keep syncing only new Canvas files, pages, and assignment descriptions. Personal
-            data endpoints such as marks, submissions, and people are not imported.
-          </p>
+    <div className="user_content admin-workbench">
+      <header className="admin-workbench__header">
+        <div>
+          <p className="admin-workbench__kicker">Course import</p>
+          <h1>Canvas content control room</h1>
+          <p>Sync reusable course material once, then keep it ready for analysis and quiz generation.</p>
         </div>
-      </section>
+        {selectedCourse?.importStatus?.imported ? (
+          <Link className="Button" href={`/courses/${selectedCourse.id}/assistant`}>
+            Open analysis
+          </Link>
+        ) : null}
+      </header>
 
       {error ? <p className="admin-import-alert admin-import-alert--error">{error}</p> : null}
       {message ? <p className="admin-import-alert">{message}</p> : null}
 
-      <div className="admin-import-grid">
-        <section className="canvas-section-card admin-import-card">
-          <div className="canvas-section-card__header">
+      <div className="admin-workbench__grid">
+        <section className="admin-panel admin-panel--courses">
+          <div className="admin-panel__header">
             <h2>Canvas courses</h2>
-            <p>{loading ? 'Loading courses from Canvas...' : `${courses.length} active course(s) available.`}</p>
+            <p>{loading ? 'Loading courses from Canvas...' : `${courses.length} active course(s)`}</p>
           </div>
           <div className="admin-course-list">
             {courses.map((course) => (
@@ -268,63 +278,61 @@ export default function AdminPage() {
           </div>
         </section>
 
-        <section className="canvas-section-card admin-import-card admin-import-card--primary">
-          <div className="canvas-section-card__header">
-            <h2>{selectedCourse ? selectedCourse.course_code || selectedCourse.name : 'Select a course'}</h2>
-            <p>{selectedCourse ? formatDate(selectedCourse.importStatus?.lastSyncedAt ?? null) : 'No course selected.'}</p>
-          </div>
-
+        <main className="admin-workbench__main">
           {selectedCourse ? (
             <>
-              <div className="admin-status-bar">
-                <div className="admin-status-bar__row">
-                  <span className="admin-status-bar__label">{statusText}</span>
-                  <span className="admin-status-bar__meta">{refreshing || isPending ? 'Refreshing…' : 'Live'}</span>
-                </div>
-                <div className="admin-status-bar__track" aria-hidden="true">
-                  <span className="admin-status-bar__fill" style={{ width: `${progressValue}%` }} />
-                </div>
-                <div className="admin-status-bar__chips">
-                  <span>{selectedCourse.importStatus?.weeksCount ?? 0} weeks</span>
-                  <span>{selectedCourse.importStatus?.filesCount ?? 0} sources</span>
-                  <span>{selectedCourse.importStatus?.readyFiles ?? 0} ready</span>
-                </div>
-              </div>
-
-              <div className="admin-import-actions">
-                <button className="Button Button--primary" type="button" disabled={isPending} onClick={() => importCourse(true)}>
-                  {isPending ? 'Importing...' : selectedCourse.importStatus?.imported ? 'Sync new content' : 'Import all content'}
-                </button>
-                <button
-                  className="Button"
-                  type="button"
-                  disabled={isPending || selectedWeekCount === 0}
-                  onClick={() => importCourse(false)}
-                >
-                  Import selected weeks
-                </button>
-                {selectedCourse.importStatus?.imported ? (
-                  <Link className="Button" href={`/courses/${selectedCourse.id}/assistant`}>
-                  Open analysis
-                  </Link>
-                ) : null}
-              </div>
-
-              <div className="admin-week-panel">
-                <div className="admin-week-panel__header">
+              <section className="admin-panel admin-panel--operation">
+                <div className="admin-panel__header admin-panel__header--split">
                   <div>
-                    <h3>Import plan</h3>
-                    <p className="admin-week-panel__lede">
-                      Choose which numbered weeks to sync. The first import includes everything, but later syncs can be limited to specific weeks.
-                    </p>
+                    <h2>{selectedCourse.course_code || selectedCourse.name}</h2>
+                    <p>{formatDate(selectedCourse.importStatus?.lastSyncedAt ?? null)}</p>
                   </div>
+                  <span className={`admin-sync-pill admin-sync-pill--${importPhase}`}>
+                    {importBusy ? 'Importing' : statusCopy(selectedCourse.importStatus)}
+                  </span>
+                </div>
+
+                <div className="admin-status-bar">
+                  <div className="admin-status-bar__row">
+                    <span className="admin-status-bar__label">{statusText}</span>
+                    <span className="admin-status-bar__meta">{refreshing || importBusy ? 'Refreshing...' : 'Live'}</span>
+                  </div>
+                  <div className="admin-status-bar__track" aria-hidden="true">
+                    <span className="admin-status-bar__fill" style={{ width: `${progressValue}%` }} />
+                  </div>
+                  <div className="admin-status-bar__chips">
+                    <span>{selectedCourse.importStatus?.weeksCount ?? 0} weeks</span>
+                    <span>{selectedCourse.importStatus?.filesCount ?? 0} sources</span>
+                    <span>{selectedCourse.importStatus?.readyFiles ?? 0} ready</span>
+                  </div>
+                </div>
+
+                <div className="admin-import-actions">
+                  <button className="Button Button--primary" type="button" disabled={importBusy} onClick={() => importCourse(true)}>
+                    {importBusy ? 'Importing...' : selectedCourse.importStatus?.imported ? 'Sync all content' : 'Import all content'}
+                  </button>
                   <button
+                    className="Button"
                     type="button"
-                    onClick={() => setSelectedWeeks(new Set(weekOptions.map((week) => week.week_number)))}
+                    disabled={importBusy || selectedWeekCount === 0}
+                    onClick={() => importCourse(false)}
                   >
+                    Import {selectedWeekCount} selected week{selectedWeekCount === 1 ? '' : 's'}
+                  </button>
+                </div>
+              </section>
+
+              <section className="admin-panel admin-panel--modules">
+                <div className="admin-panel__header admin-panel__header--split">
+                  <div>
+                    <h2>Import plan</h2>
+                    <p>Numbered teaching weeks are selectable. Supporting modules sync with full-course imports.</p>
+                  </div>
+                  <button className="admin-link-button" type="button" onClick={() => setSelectedWeeks(new Set(weekOptions.map((week) => week.week_number)))}>
                     Select all
                   </button>
                 </div>
+
                 {weekOptions.length ? (
                   <div className="admin-week-list">
                     {weekOptions.map((week) => (
@@ -361,30 +369,49 @@ export default function AdminPage() {
                     </ul>
                   </div>
                 ) : null}
-              </div>
+              </section>
+
+              <section className="admin-panel admin-panel--activity">
+                <div className="admin-panel__header">
+                  <h2>Source activity</h2>
+                  <p>{sourceRows.length ? 'Recent imported sources and processing states.' : 'No imported sources yet.'}</p>
+                </div>
+                {sourceRows.length ? (
+                  <div className="admin-source-list">
+                    {sourceRows.map((source) => (
+                      <div key={source.id} className="admin-source-row">
+                        <span>
+                          <strong>{source.name}</strong>
+                          <small>{source.kind}</small>
+                        </span>
+                        <em data-status={source.status}>{source.status}</em>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
             </>
           ) : null}
-        </section>
+        </main>
       </div>
 
-      <section className="canvas-section-card admin-import-card admin-manual-upload">
-        <div className="canvas-section-card__header">
-          <h2>Legacy upload</h2>
-          <p>Keep this for one-off documents outside Canvas. It is separate from course import.</p>
+      <details className="admin-legacy-upload">
+        <summary>Legacy upload</summary>
+        <div className="admin-legacy-upload__body">
+          <form onSubmit={handleUpload} className="admin-upload-form">
+            <button type="button" className="admin-file-drop" onClick={() => document.getElementById('file-input')?.click()}>
+              {file ? file.name : 'Choose a file'}
+            </button>
+            <input id="file-input" type="file" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            <button type="submit" className="Button" disabled={!file || uploadStatus === 'uploading'}>
+              {uploadStatus === 'uploading' ? 'Uploading...' : 'Upload'}
+            </button>
+          </form>
+          {uploadMessage ? (
+            <p className={`admin-import-alert ${uploadStatus === 'error' ? 'admin-import-alert--error' : ''}`}>{uploadMessage}</p>
+          ) : null}
         </div>
-        <form onSubmit={handleUpload} className="admin-upload-form">
-          <button type="button" className="admin-file-drop" onClick={() => document.getElementById('file-input')?.click()}>
-            {file ? file.name : 'Choose a file'}
-          </button>
-          <input id="file-input" type="file" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          <button type="submit" className="Button" disabled={!file || uploadStatus === 'uploading'}>
-            {uploadStatus === 'uploading' ? 'Uploading...' : 'Upload'}
-          </button>
-        </form>
-        {uploadMessage ? (
-          <p className={`admin-import-alert ${uploadStatus === 'error' ? 'admin-import-alert--error' : ''}`}>{uploadMessage}</p>
-        ) : null}
-      </section>
+      </details>
     </div>
   );
 }

@@ -464,6 +464,14 @@ body {
   overflow-y: auto;
 }
 
+.ic-Layout-columns--admin .ic-app-main-content {
+  width: 100%;
+}
+
+.ic-Layout-columns--admin .ic-Layout-contentMain {
+  overflow-x: hidden;
+}
+
 #right-side {
   padding: 16px 16px 24px;
 }
@@ -1553,12 +1561,224 @@ body {
   text-align: left;
 }
 
+.admin-workbench {
+  display: grid;
+  gap: 18px;
+  max-width: 1320px;
+}
+
+.admin-workbench__header {
+  align-items: end;
+  border-bottom: 1px solid #d8dee8;
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding-bottom: 18px;
+}
+
+.admin-workbench__header h1 {
+  color: #101828;
+  font-size: 28px;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.admin-workbench__header p {
+  color: #4b5565;
+  font-size: 14px;
+  margin: 6px 0 0;
+  max-width: 720px;
+}
+
+.admin-workbench__kicker {
+  color: #9a6700 !important;
+  font-size: 12px !important;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin: 0 0 6px !important;
+  text-transform: uppercase;
+}
+
+.admin-workbench__grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 330px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.admin-workbench__main {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-panel {
+  background: #ffffff;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.admin-panel--operation {
+  border-color: #b8c7dc;
+}
+
+.admin-panel__header {
+  margin-bottom: 14px;
+}
+
+.admin-panel__header--split {
+  align-items: start;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-panel__header h2 {
+  color: #101828;
+  font-size: 17px;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.admin-panel__header p {
+  color: #667085;
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+
+.admin-sync-pill {
+  background: #eef4ff;
+  border: 1px solid #b2ccff;
+  border-radius: 999px;
+  color: #175cd3;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 10px;
+}
+
+.admin-sync-pill--importing {
+  background: #fff7e6;
+  border-color: #ffd18a;
+  color: #9a6700;
+}
+
+.admin-sync-pill--success {
+  background: #ecfdf3;
+  border-color: #abefc6;
+  color: #067647;
+}
+
+.admin-sync-pill--error {
+  background: #fef3f2;
+  border-color: #fecdca;
+  color: #b42318;
+}
+
+.admin-link-button {
+  background: transparent;
+  border: none;
+  color: #175cd3;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0;
+}
+
+.admin-source-list {
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.admin-source-row {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+}
+
+.admin-source-row + .admin-source-row {
+  border-top: 1px solid #e4e7ec;
+}
+
+.admin-source-row strong,
+.admin-source-row small {
+  display: block;
+}
+
+.admin-source-row strong {
+  color: #101828;
+  font-size: 13px;
+}
+
+.admin-source-row small {
+  color: #667085;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.admin-source-row em {
+  border-radius: 999px;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+  padding: 4px 9px;
+}
+
+.admin-source-row em[data-status='ready'] {
+  background: #ecfdf3;
+  color: #067647;
+}
+
+.admin-source-row em[data-status='processing'],
+.admin-source-row em[data-status='pending'] {
+  background: #fff7e6;
+  color: #9a6700;
+}
+
+.admin-source-row em[data-status='failed'] {
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.admin-legacy-upload {
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px 14px;
+}
+
+.admin-legacy-upload summary {
+  color: #344054;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.admin-legacy-upload__body {
+  border-top: 1px solid #e4e7ec;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
 @media (max-width: 900px) {
   .admin-import-grid {
     grid-template-columns: 1fr;
   }
 
   .admin-import-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-workbench__header,
+  .admin-panel__header--split {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-workbench__grid {
     grid-template-columns: 1fr;
   }
 }

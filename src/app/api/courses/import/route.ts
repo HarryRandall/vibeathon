@@ -14,6 +14,18 @@ type ImportBody = {
   weekNumbers?: number[];
 };
 
+function jsonFromFunctionResponse(text: string, status: number) {
+  if (!text) return NextResponse.json({}, { status });
+  try {
+    return NextResponse.json(JSON.parse(text), { status });
+  } catch {
+    return NextResponse.json(
+      { error: text || `Supabase function returned HTTP ${status}` },
+      { status: status >= 200 && status < 300 ? 502 : status },
+    );
+  }
+}
+
 export async function POST(req: NextRequest) {
   let body: ImportBody = {};
   try {
@@ -21,6 +33,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'invalid_json', message: 'Body must be JSON' }, { status: 400 });
   }
+
   if (body.canvasCourseId === undefined || body.canvasCourseId === null) {
     return NextResponse.json({ error: 'bad_request', message: 'canvasCourseId required' }, { status: 400 });
   }
@@ -38,11 +51,7 @@ export async function POST(req: NextRequest) {
           weekNumbers: body.weekNumbers,
         }),
       });
-      const text = await res.text();
-      return new NextResponse(text, {
-        status: res.status,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return jsonFromFunctionResponse(await res.text(), res.status);
     } catch (err) {
       console.error('[api/courses/import] supabase function call failed:', err);
       return NextResponse.json(
@@ -52,7 +61,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Fallback path: no Supabase configured → run the in-memory Canvas ingest directly.
   try {
     const canvasCourseId = Number(body.canvasCourseId);
     if (!canvasCourseId || Number.isNaN(canvasCourseId)) {
