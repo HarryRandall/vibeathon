@@ -5,8 +5,8 @@ import Link from 'next/link';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default function QuizzesPage({ params }: { params: { courseId: string } }) {
-  const props = getStudySessionServerProps(params.courseId);
+export default async function QuizzesPage({ params }: { params: { courseId: string } }) {
+  const props = await getStudySessionServerProps(params.courseId);
   if (!props) {
     return (
       <div className="user_content">

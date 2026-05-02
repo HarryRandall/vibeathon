@@ -141,28 +141,19 @@ export function StudySession({
     setIngestStep("starting");
     setIngestError(null);
     try {
-      const res = await fetch("/api/study/ingest", {
+      const res = await fetch("/api/courses/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ courseId }),
+        body: JSON.stringify({ canvasCourseId: courseId, localCourseId: String(courseId) }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message ?? `Ingest failed (HTTP ${res.status})`);
       }
-      const data = await res.json();
+      await res.json().catch(() => ({}));
       setIngested(true);
       setIngestStatus("ready");
-      setSkippedCount(data.skippedCount ?? 0);
-      // Refresh documents list via courses endpoint
-      const docsRes = await fetch(`/api/study/ingest?courseId=${courseId}`);
-      if (docsRes.ok) {
-        const p = await docsRes.json();
-        if (typeof p.documentsCount === "number") {
-          // We don't get full doc list back from progress; reload page state instead.
-        }
-      }
-      // Hard reload to pull fresh documents list from server.
+      setSkippedCount(0);
       window.location.reload();
     } catch (err) {
       setIngestStatus("error");
@@ -452,9 +443,9 @@ function IngestPanel({
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-anu-gold">Step 1</p>
       <h3 className="mt-1 text-2xl font-semibold text-anu-ink">Load this course's materials</h3>
       <p className="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-700">
-        I'll fetch the modules for <strong>{courseCode}</strong>, download the lecture-slide PDFs,
-        extract the text, and embed everything for retrieval. This typically takes 30 seconds to
-        a few minutes depending on the size of the course. Your token never leaves the server.
+        I'll fetch the modules for <strong>{courseCode}</strong>, download Canvas files, pages, and
+        assignment briefs, then process them for retrieval. Re-running this only imports new course
+        sources; marks, submissions, and people endpoints are not imported.
       </p>
 
       {status === "running" || status === "idle" ? (

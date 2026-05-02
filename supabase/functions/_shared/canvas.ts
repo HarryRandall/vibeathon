@@ -28,12 +28,20 @@ export type CanvasCourse = {
 export type CanvasModule = { id: number; name: string; position: number };
 
 export type CanvasModuleItem = {
-  id: number; title: string; type: string; content_id?: number; url?: string;
+  id: number; title: string; type: string; content_id?: number; url?: string; page_url?: string; html_url?: string;
 };
 
 export type CanvasFile = {
   id: number; display_name: string; filename: string; size: number;
   'content-type'?: string; url: string;
+};
+
+export type CanvasPage = {
+  page_id?: number; url: string; title: string; body?: string; html_url?: string;
+};
+
+export type CanvasAssignment = {
+  id: number; name: string; description?: string; html_url?: string; points_possible?: number | null;
 };
 
 export const canvas = {
@@ -47,6 +55,12 @@ export const canvas = {
   getFile: (t: string, fileId: number) =>
     fetch(`${BASE}/api/v1/files/${fileId}`, { headers: headers(t) })
       .then(async r => r.ok ? r.json() as Promise<CanvasFile> : Promise.reject(new Error(await r.text()))),
+  getPage: (t: string, courseId: string | number, pageUrl: string) =>
+    fetch(`${BASE}/api/v1/courses/${courseId}/pages/${encodeURIComponent(pageUrl)}`, { headers: headers(t) })
+      .then(async r => r.ok ? r.json() as Promise<CanvasPage> : Promise.reject(new Error(await r.text()))),
+  getAssignment: (t: string, courseId: string | number, assignmentId: number) =>
+    fetch(`${BASE}/api/v1/courses/${courseId}/assignments/${assignmentId}`, { headers: headers(t) })
+      .then(async r => r.ok ? r.json() as Promise<CanvasAssignment> : Promise.reject(new Error(await r.text()))),
 };
 
 /** Try to extract a week number from a module name e.g. "Week 3 — Rasterisation". */

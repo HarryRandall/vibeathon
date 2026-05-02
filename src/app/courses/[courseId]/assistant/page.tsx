@@ -5,14 +5,14 @@ import Link from 'next/link';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default function AssistantPage({
+export default async function AssistantPage({
   params,
   searchParams,
 }: {
   params: { courseId: string };
   searchParams?: { tab?: string };
 }) {
-  const props = getStudySessionServerProps(params.courseId);
+  const props = await getStudySessionServerProps(params.courseId);
   if (!props) {
     return (
       <div className="user_content">

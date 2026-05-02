@@ -5,6 +5,7 @@ import { getOpenAIClient, getOpenAIModelName } from "./openai-client";
 import { zodToJsonSchema } from "@/lib/util/json-schema";
 import { retrieveTopK } from "./retrieve";
 import { studyStore } from "./store";
+import { getImportedCourse, retrieveImportedSources } from "./supabase-rag";
 
 export const QuizQuestionSchema = z.object({
   prompt: z.string().describe("The full question text. Include any setup, formulas, or context the student needs to answer."),
@@ -58,17 +59,24 @@ export async function generateQuiz(opts: {
   count: number;
 }): Promise<{ quiz: Quiz; sourceLabels: { index: number; title: string; url: string }[]; modelUsed: string }> {
   const corpus = studyStore.getCorpus(opts.courseId);
-  if (!corpus) throw new Error("Course not ingested yet");
-
   const model = getOpenAIModelName();
 
-  const hits = await retrieveTopK(corpus, opts.topic, Math.max(8, opts.count + 4));
-  const sources = hits.map((h, i) => ({
-    index: i + 1,
-    title: h.document.title,
-    url: h.document.url,
-    excerpt: h.chunk.text,
-  }));
+  const sources = corpus
+    ? (await retrieveTopK(corpus, opts.topic, Math.max(8, opts.count + 4))).map((h, i) => ({
+        index: i + 1,
+        title: h.document.title,
+        url: h.document.url,
+        excerpt: h.chunk.text,
+      }))
+    : (await retrieveImportedSources(opts.courseId, opts.topic, Math.max(8, opts.count + 4))).map((s) => ({
+        index: s.index,
+        title: s.documentTitle,
+        url: s.url,
+        excerpt: s.excerpt,
+      }));
+
+  const importedCourse = corpus ? null : await getImportedCourse(opts.courseId);
+  if (!corpus && !importedCourse) throw new Error("Course not imported yet");
 
   const contextBlock = sources
     .map((s) => `[${s.index}] (${s.title})\n${s.excerpt}`)
@@ -85,7 +93,9 @@ export async function generateQuiz(opts: {
       {
         role: "user",
         content: [
-          `Course: ${corpus.courseCode} — ${corpus.courseName}`,
+          corpus
+            ? `Course: ${corpus.courseCode} — ${corpus.courseName}`
+            : `Course: ${importedCourse?.course_code ?? opts.courseId} — ${importedCourse?.short_name ?? 'Imported course'}`,
           `Topic requested: ${opts.topic}`,
           `Number of questions: ${opts.count}`,
           "",

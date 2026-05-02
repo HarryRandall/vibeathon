@@ -3,6 +3,7 @@ import "server-only";
 import { getOpenAIClient, getOpenAIModelName } from "./openai-client";
 import { retrieveTopK } from "./retrieve";
 import { studyStore } from "./store";
+import { getImportedCourse, retrieveImportedSources } from "./supabase-rag";
 import type { RetrievalHit } from "./types";
 
 const TOP_K = 8;
@@ -40,19 +41,23 @@ export async function askWithContext(opts: {
   modelUsed: string;
 }> {
   const corpus = studyStore.getCorpus(opts.courseId);
-  if (!corpus) throw new Error("Course not ingested yet");
-
   const model = getOpenAIModelName();
 
-  const hits = await retrieveTopK(corpus, opts.question, TOP_K);
-  const sources = trimSourcesToBudget(hits, MAX_CONTEXT_CHARS);
+  const sources = corpus
+    ? trimSourcesToBudget(await retrieveTopK(corpus, opts.question, TOP_K), MAX_CONTEXT_CHARS)
+    : await retrieveImportedSources(opts.courseId, opts.question, TOP_K);
+
+  const importedCourse = corpus ? null : await getImportedCourse(opts.courseId);
+  if (!corpus && !importedCourse) throw new Error("Course not imported yet");
 
   const contextBlock = sources
     .map((s) => `[${s.index}] (${s.documentTitle} — ${s.moduleName ?? "unknown module"})\n${s.excerpt}`)
     .join("\n\n---\n\n");
 
   const userMessage = [
-    `Course: ${corpus.courseCode} — ${corpus.courseName}`,
+    corpus
+      ? `Course: ${corpus.courseCode} — ${corpus.courseName}`
+      : `Course: ${importedCourse?.course_code ?? opts.courseId} — ${importedCourse?.short_name ?? 'Imported course'}`,
     "",
     "Excerpts retrieved from course materials:",
     contextBlock || "(no relevant excerpts retrieved)",
