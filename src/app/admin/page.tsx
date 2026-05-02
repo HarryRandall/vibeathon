@@ -11,6 +11,8 @@ type ImportStatus = {
   readyFiles: number;
   failedFiles: number;
   processingFiles: number;
+  importing: boolean;
+  importStartedAt: string | null;
 } | null;
 
 type CanvasCourse = {
@@ -33,6 +35,7 @@ type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 type ImportPhase = 'idle' | 'importing' | 'success' | 'error';
 
 function statusCopy(status: ImportStatus) {
+  if (status?.importing) return 'Importing';
   if (!status?.imported) return 'Not imported';
   if (status.processingFiles > 0) return `${status.processingFiles} processing`;
   if (status.failedFiles > 0) return `${status.failedFiles} need attention`;
@@ -149,14 +152,17 @@ export default function AdminPage() {
   }, [selectedCourse?.id]);
 
   useEffect(() => {
-    const hasActiveSync = importPhase === 'importing' || Boolean(selectedCourse?.importStatus?.processingFiles);
+    const hasActiveSync =
+      importPhase === 'importing' ||
+      Boolean(selectedCourse?.importStatus?.importing) ||
+      Boolean(selectedCourse?.importStatus?.processingFiles);
     if (!selectedCourse || !hasActiveSync) return;
     const interval = window.setInterval(() => {
       setRefreshing(true);
       void Promise.all([loadCourses(true), loadDetails(selectedCourse.id, false)]).finally(() => setRefreshing(false));
-    }, 3000);
+    }, 5000);
     return () => window.clearInterval(interval);
-  }, [importPhase, selectedCourse?.id, selectedCourse?.importStatus?.processingFiles]);
+  }, [importPhase, selectedCourse?.id, selectedCourse?.importStatus?.importing, selectedCourse?.importStatus?.processingFiles]);
 
   async function importCourse(allWeeks: boolean) {
     if (!selectedCourse) return;
@@ -214,14 +220,17 @@ export default function AdminPage() {
 
   const weekOptions = details?.weeks ?? [];
   const supportingModules = details?.supportingModules ?? [];
-  const sourceRows = details?.files.slice(0, 8) ?? [];
+  const sourceRows = details?.files.slice(0, 24) ?? [];
   const selectedWeekCount = selectedWeeks.size;
   const activeFile = details?.activeFile ?? null;
-  const importBusy = importPhase === 'importing';
+  const importBusy = importPhase === 'importing' || Boolean(selectedCourse?.importStatus?.importing);
   const hasActiveSync = importBusy || Boolean(selectedCourse?.importStatus?.processingFiles);
+  const syncPillState = importBusy ? 'importing' : importPhase === 'error' ? 'error' : importPhase === 'success' ? 'success' : 'idle';
   const statusText = selectedCourse
     ? importBusy
-      ? `Importing ${selectedCourse.course_code || selectedCourse.name}`
+      ? selectedCourse.importStatus?.importing
+        ? `Scanning Canvas modules for ${selectedCourse.course_code || selectedCourse.name}`
+        : `Importing ${selectedCourse.course_code || selectedCourse.name}`
       : activeFile?.status === 'processing'
         ? `Processing ${activeFile.name}`
         : selectedCourse.importStatus?.processingFiles
@@ -287,9 +296,13 @@ export default function AdminPage() {
                 <div className="admin-panel__header admin-panel__header--split">
                   <div>
                     <h2>{selectedCourse.course_code || selectedCourse.name}</h2>
-                    <p>{formatDate(selectedCourse.importStatus?.lastSyncedAt ?? null)}</p>
+                    <p>
+                      {selectedCourse.importStatus?.importing && selectedCourse.importStatus.importStartedAt
+                        ? `Import started ${formatDate(selectedCourse.importStatus.importStartedAt)}`
+                        : formatDate(selectedCourse.importStatus?.lastSyncedAt ?? null)}
+                    </p>
                   </div>
-                  <span className={`admin-sync-pill admin-sync-pill--${importPhase}`}>
+                  <span className={`admin-sync-pill admin-sync-pill--${syncPillState}`}>
                     {importBusy ? 'Importing' : statusCopy(selectedCourse.importStatus)}
                   </span>
                 </div>
@@ -297,9 +310,7 @@ export default function AdminPage() {
                 <div className="admin-status-bar">
                   <div className="admin-status-bar__row">
                     <span className="admin-status-bar__label">{statusText}</span>
-                    <span className="admin-status-bar__meta">
-                      {refreshing ? 'Refreshing...' : hasActiveSync ? 'Live sync' : 'Idle'}
-                    </span>
+                    <span className="admin-status-bar__meta">{hasActiveSync ? 'Live sync' : 'Idle'}</span>
                   </div>
                   <div className="admin-status-bar__track" aria-hidden="true">
                     <span className="admin-status-bar__fill" style={{ width: `${progressValue}%` }} />
@@ -308,8 +319,19 @@ export default function AdminPage() {
                     <span>{selectedCourse.importStatus?.weeksCount ?? 0} weeks</span>
                     <span>{selectedCourse.importStatus?.filesCount ?? 0} sources</span>
                     <span>{selectedCourse.importStatus?.readyFiles ?? 0} ready</span>
+                    <span>{selectedCourse.importStatus?.failedFiles ?? 0} failed</span>
                   </div>
                 </div>
+
+                {importBusy ? (
+                  <div className="admin-import-loading">
+                    <strong>Import in progress</strong>
+                    <p>
+                      Canvas modules are being scanned and queued. The page will refresh quietly while the import is active, and only
+                      one import request is allowed per course at a time.
+                    </p>
+                  </div>
+                ) : null}
 
                 <div className="admin-import-actions">
                   <button className="Button Button--primary" type="button" disabled={importBusy} onClick={() => importCourse(true)}>
@@ -384,7 +406,11 @@ export default function AdminPage() {
               <section className="admin-panel admin-panel--activity">
                 <div className="admin-panel__header">
                   <h2>Source activity</h2>
-                  <p>{sourceRows.length ? 'Recent imported sources and processing states.' : 'No imported sources yet.'}</p>
+                  <p>
+                    {sourceRows.length
+                      ? `Showing the most recent ${sourceRows.length} of ${details?.files.length ?? 0} imported sources.`
+                      : 'No imported sources yet.'}
+                  </p>
                 </div>
                 {sourceRows.length ? (
                   <div className="admin-source-list">

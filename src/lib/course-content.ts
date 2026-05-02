@@ -6,9 +6,7 @@ export const COURSE_NAV_ITEMS = [
   { key: 'modules', label: 'Modules', segments: ['modules'] },
   { key: 'announcements', label: 'Announcements', segments: ['announcements'] },
   { key: 'discussions', label: 'Discussions', segments: ['discussions'] },
-  { key: 'assistant', label: 'Study Assistant', segments: ['assistant'] },
   { key: 'recordings', label: 'Class Recordings', segments: ['recordings'] },
-  { key: 'materials', label: 'Readings', segments: ['materials'] },
   { key: 'assignments', label: 'Assignments', segments: ['assignments'] },
   { key: 'grades', label: 'Marks', segments: ['grades'] },
   { key: 'people', label: 'People', segments: ['people'] },
@@ -26,6 +24,7 @@ export function buildCourseSectionTabs(courseId: string) {
 }
 
 export function getCourseSectionLabel(section: string) {
+  if (section === 'assistant') return 'Course tools';
   return COURSE_NAV_ITEMS.find((item) => item.segments[0] === section)?.label ?? null;
 }
 
@@ -79,7 +78,6 @@ export function getCourseHomeData(courseId: string): CourseHomeData | null {
             { text: 'Assignments', href: courseHref(courseId, 'assignments') },
             { text: 'Marks', href: courseHref(courseId, 'grades') },
             { text: 'People', href: courseHref(courseId, 'people') },
-            { text: 'Study Assistant', href: courseHref(courseId, 'assistant') },
           ],
         },
         {
@@ -202,7 +200,12 @@ function makeItem(courseId: string, id: string, title: string, type: CanvasModul
     type,
     typeLabel: labelMap[type],
     iconClass: iconClassMap[type],
-    href: type === 'attachment' ? courseHref(courseId, 'materials') : type === 'discussion_topic' ? courseHref(courseId, 'discussions') : courseHref(courseId, type === 'assignment' ? 'assignments' : type === 'quiz' ? 'assistant?tab=quiz' : ''),
+    href:
+      type === 'attachment'
+        ? courseHref(courseId, 'modules')
+        : type === 'discussion_topic'
+          ? courseHref(courseId, 'discussions')
+          : courseHref(courseId, type === 'assignment' ? 'assignments' : type === 'quiz' ? 'assistant?tab=quiz' : ''),
     meta,
     points,
   };

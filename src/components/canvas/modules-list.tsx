@@ -1,8 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import type { CanvasModule, CanvasModuleItem } from '@/lib/course-content';
+import type { CourseModule as CanvasModule, CourseModuleItem as CanvasModuleItem } from '@/lib/course-modules';
 
 type CanvasModulesListProps = {
   courseId: string;
@@ -69,9 +68,6 @@ export default function CanvasModulesList({ courseId, modules }: CanvasModulesLi
             <button className="btn" id="expand_collapse_all" aria-expanded={!allCollapsed} data-expand={!allCollapsed} type="button" onClick={toggleAll}>
               {allCollapsed ? 'Expand All' : 'Collapse All'}
             </button>
-            <button type="button" className="btn offline_web_export">
-              Export Course Content
-            </button>
           </div>
         </div>
       </div>
@@ -94,9 +90,6 @@ export default function CanvasModulesList({ courseId, modules }: CanvasModulesLi
               >
                 <a id={`module_${module.id}`} />
                 <div className="ig-header header" id={module.id}>
-                  <span className="sortable-handle reorder_module_link" title="Drag to reorder modules" aria-hidden="true">
-                    ⋮⋮
-                  </span>
                   <h2 className="screenreader-only">{module.name}</h2>
                   <button
                     type="button"
@@ -111,13 +104,8 @@ export default function CanvasModulesList({ courseId, modules }: CanvasModulesLi
                     <span className="name">{module.name}</span>
                   </button>
 
-                  <div className="prerequisites">
-                    <div className="prerequisites_message" title="Prerequisites:" />
-                  </div>
-
                   <div className="module_header_items">
                     <div className="ig-header-admin">
-                      <div className="requirements_message" data-requirement-type="all" />
                       <div className="completion_status">
                         <ModuleStatusIcon state={module.state} />
                         <span className="screenreader-only">
@@ -130,11 +118,11 @@ export default function CanvasModulesList({ courseId, modules }: CanvasModulesLi
 
                 <div className={`content ${collapsed ? 'is-collapsed' : ''}`} id={`context_module_content_${module.id}`}>
                   <ul className="ig-list items context_module_items">
-                    {module.items.map((item, index) => (
+                    {module.items.length ? module.items.map((item) => (
                       <li
                         key={item.id}
                         id={`context_module_item_${item.id}`}
-                        className={`context_module_item student-view ${item.type} indent_0 _requirement rendered ${index === 1 ? 'context_module_item_hover' : ''}`}
+                        className={`context_module_item student-view ${item.type} indent_0 _requirement rendered`}
                       >
                         <div className="ig-row ig-published student-view no-estimated-duration">
                           <span className="type_icon" title={item.typeLabel} role="none">
@@ -147,10 +135,7 @@ export default function CanvasModulesList({ courseId, modules }: CanvasModulesLi
                           <div className="ig-info">
                             <div className="module-item-title">
                               <span className="item_name">
-                                <Link title={item.title} className="ig-title title item_link" href={item.href} aria-describedby={`module-item-${item.id}-details`}>
-                                  {item.title}
-                                </Link>
-                                <span title={item.title} className="title locked_title">
+                                <span title={item.title} className="ig-title title item_link" aria-describedby={`module-item-${item.id}-details`}>
                                   {item.title}
                                 </span>
                                 <span className="points_possible" style={{ display: 'none' }}>
@@ -183,27 +168,20 @@ export default function CanvasModulesList({ courseId, modules }: CanvasModulesLi
                           <div className="module-item-status-icon" />
                         </div>
                       </li>
-                    ))}
+                    )) : (
+                      <li className="context_module_item student-view rendered">
+                        <div className="ig-row ig-published student-view no-estimated-duration">
+                          <div className="ig-info">
+                            <div className="module-item-title">
+                              <span className="item_name">
+                                <span className="ig-title title item_link text-neutral-500">No imported items in this week yet</span>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </li>
+                    )}
                   </ul>
-
-                  <div className="footer">
-                    <div className="progression_container">
-                      <span className="progression_details_link">
-                        <span className="progression_started">
-                          <span className="progression_started_count">
-                            {module.state === 'current' ? 1 : 0}
-                          </span>{' '}
-                          In Progress
-                        </span>{' '}
-                        <span className="progression_complete">
-                          <span className="progression_complete_count">
-                            {module.state === 'complete' ? module.items.length : 0}
-                          </span>{' '}
-                          Complete
-                        </span>
-                      </span>
-                    </div>
-                  </div>
                 </div>
               </section>
             );

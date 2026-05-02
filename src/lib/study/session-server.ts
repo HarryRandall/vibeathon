@@ -13,7 +13,6 @@ export type StudySessionServerProps = {
     title: string;
     kind: string;
     moduleName: string | null;
-    url: string;
     charCount: number;
     pageCount: number | null;
   }[];
@@ -34,7 +33,6 @@ export async function getStudySessionServerProps(courseIdStr: string): Promise<S
         title: d.title,
         kind: d.kind,
         moduleName: d.moduleName,
-        url: d.url,
         charCount: d.charCount,
         pageCount: d.pageCount ?? null,
       }))
@@ -78,7 +76,6 @@ export async function getStudySessionServerProps(courseIdStr: string): Promise<S
       title: file.name,
       kind: file.kind,
       moduleName,
-      url: `/courses/${courseIdStr}/materials`,
       charCount: Number(file.file_size ?? 0),
       pageCount: null,
     };

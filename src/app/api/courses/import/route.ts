@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { functionsUrl, getSupabaseAdmin, serviceAuthHeader } from '@/lib/supabase-admin';
 import { CanvasError, getCanvasClientFromEnv } from '@/lib/canvas/client';
 import { importCanvasCourseToSupabase } from '@/lib/canvas/import-course';
+import { acquireCourseImportLock, releaseCourseImportLock } from '@/lib/course-import-lock';
 import { ingestCourse } from '@/lib/study/ingest';
 import { formatErrorChain } from '@/lib/util/error-format';
 
@@ -43,38 +44,124 @@ export async function POST(req: NextRequest) {
   } catch {
     localClient = null;
   }
+  const lockCourseId = String(body.localCourseId ?? body.canvasCourseId);
+  let lockAcquired = false;
 
   if (supabase) {
     try {
-      const res = await fetch(functionsUrl('ingest-canvas'), {
-        method: 'POST',
-        headers: { ...serviceAuthHeader(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          canvasCourseId: body.canvasCourseId,
+      lockAcquired = await acquireCourseImportLock(supabase, lockCourseId);
+    } catch (err) {
+      return NextResponse.json(
+        { error: 'import_lock_failed', message: formatErrorChain(err) },
+        { status: 500 },
+      );
+    }
+
+    if (!lockAcquired) {
+      return NextResponse.json(
+        { error: 'import_in_progress', message: 'An import is already running for this course.' },
+        { status: 409 },
+      );
+    }
+  }
+
+  try {
+    if (supabase) {
+      try {
+        const res = await fetch(functionsUrl('ingest-canvas'), {
+          method: 'POST',
+          headers: { ...serviceAuthHeader(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            canvasCourseId: body.canvasCourseId,
+            localCourseId: body.localCourseId,
+            weekNumbers: body.weekNumbers,
+          }),
+        });
+        const parsed = parseFunctionResponse(await res.text(), res.status);
+        const functionError = typeof parsed.body.error === 'string' ? parsed.body.error : '';
+        const functionMessage = typeof parsed.body.message === 'string' ? parsed.body.message : '';
+        const needsLocalFallback =
+          !res.ok &&
+          localClient &&
+          (functionError.includes('CANVAS_TOKEN') ||
+            functionMessage.includes('CANVAS_TOKEN') ||
+            functionError.includes('CANVAS_BASE_URL') ||
+            functionMessage.includes('CANVAS_BASE_URL'));
+
+        if (!needsLocalFallback) {
+          return NextResponse.json(parsed.body, { status: parsed.status });
+        }
+
+        const fallbackClient = localClient;
+        if (!fallbackClient) {
+          return NextResponse.json(parsed.body, { status: parsed.status });
+        }
+
+        const canvasCourseId = Number(body.canvasCourseId);
+        if (!canvasCourseId || Number.isNaN(canvasCourseId)) {
+          return NextResponse.json(
+            { error: 'bad_request', message: 'canvasCourseId must be numeric' },
+            { status: 400 },
+          );
+        }
+
+        const courses = await fallbackClient.getActiveCourses();
+        const course = courses.find((candidate) => candidate.id === canvasCourseId);
+        if (!course) {
+          return NextResponse.json(
+            { error: 'not_found', message: 'Course not in active Canvas enrollment' },
+            { status: 404 },
+          );
+        }
+
+        const result = await importCanvasCourseToSupabase({
+          client: fallbackClient,
+          supabase,
+          course,
           localCourseId: body.localCourseId,
           weekNumbers: body.weekNumbers,
-        }),
-      });
-      const parsed = parseFunctionResponse(await res.text(), res.status);
-      const functionError = typeof parsed.body.error === 'string' ? parsed.body.error : '';
-      const functionMessage = typeof parsed.body.message === 'string' ? parsed.body.message : '';
-      const needsLocalFallback =
-        !res.ok &&
-        localClient &&
-        (functionError.includes('CANVAS_TOKEN') ||
-          functionMessage.includes('CANVAS_TOKEN') ||
-          functionError.includes('CANVAS_BASE_URL') ||
-          functionMessage.includes('CANVAS_BASE_URL'));
+        });
+        return NextResponse.json(result);
+      } catch (err) {
+        console.error('[api/courses/import] supabase function call failed:', err);
+        const fallbackClient = localClient;
+        if (supabase && fallbackClient) {
+          try {
+            const canvasCourseId = Number(body.canvasCourseId);
+            if (!canvasCourseId || Number.isNaN(canvasCourseId)) {
+              return NextResponse.json(
+                { error: 'bad_request', message: 'canvasCourseId must be numeric' },
+                { status: 400 },
+              );
+            }
 
-      if (!needsLocalFallback) {
-        return NextResponse.json(parsed.body, { status: parsed.status });
+            const courses = await fallbackClient.getActiveCourses();
+            const course = courses.find((candidate) => candidate.id === canvasCourseId);
+            if (!course) {
+              return NextResponse.json(
+                { error: 'not_found', message: 'Course not in active Canvas enrollment' },
+                { status: 404 },
+              );
+            }
+
+            const result = await importCanvasCourseToSupabase({
+              client: fallbackClient,
+              supabase,
+              course,
+              localCourseId: body.localCourseId,
+              weekNumbers: body.weekNumbers,
+            });
+            return NextResponse.json(result);
+          } catch (fallbackErr) {
+            console.error('[api/courses/import] local supabase fallback failed:', fallbackErr);
+          }
+        }
+
+        return NextResponse.json({ error: 'supabase_function_failed', message: formatErrorChain(err) }, { status: 502 });
       }
+    }
 
-      const fallbackClient = localClient;
-      if (!fallbackClient) {
-        return NextResponse.json(parsed.body, { status: parsed.status });
-      }
-
+    try {
       const canvasCourseId = Number(body.canvasCourseId);
       if (!canvasCourseId || Number.isNaN(canvasCourseId)) {
         return NextResponse.json(
@@ -83,8 +170,18 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const courses = await fallbackClient.getActiveCourses();
-      const course = courses.find((candidate) => candidate.id === canvasCourseId);
+      let client;
+      try {
+        client = getCanvasClientFromEnv();
+      } catch (envErr) {
+        return NextResponse.json(
+          { error: 'config', message: envErr instanceof Error ? envErr.message : String(envErr) },
+          { status: 503 },
+        );
+      }
+
+      const courses = await client.getActiveCourses();
+      const course = courses.find((c) => c.id === canvasCourseId);
       if (!course) {
         return NextResponse.json(
           { error: 'not_found', message: 'Course not in active Canvas enrollment' },
@@ -92,108 +189,42 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const result = await importCanvasCourseToSupabase({
-        client: fallbackClient,
-        supabase,
-        course,
-        localCourseId: body.localCourseId,
-        weekNumbers: body.weekNumbers,
+      const corpus = await ingestCourse(client, {
+        id: course.id,
+        code: course.course_code || course.name,
+        name: course.name,
       });
-      return NextResponse.json(result);
+
+      return NextResponse.json({
+        ok: true,
+        backend: 'in-memory',
+        courseId: corpus.courseId,
+        documentsCount: corpus.documents.length,
+        chunksCount: corpus.chunks.length,
+        skippedCount: corpus.skipped.length,
+        embeddingModel: corpus.embeddingModel,
+        ingestedAt: corpus.ingestedAt,
+      });
     } catch (err) {
-      console.error('[api/courses/import] supabase function call failed:', err);
-      const fallbackClient = localClient;
-      if (supabase && fallbackClient) {
-        try {
-          const canvasCourseId = Number(body.canvasCourseId);
-          if (!canvasCourseId || Number.isNaN(canvasCourseId)) {
-            return NextResponse.json(
-              { error: 'bad_request', message: 'canvasCourseId must be numeric' },
-              { status: 400 },
-            );
-          }
-
-          const courses = await fallbackClient.getActiveCourses();
-          const course = courses.find((candidate) => candidate.id === canvasCourseId);
-          if (!course) {
-            return NextResponse.json(
-              { error: 'not_found', message: 'Course not in active Canvas enrollment' },
-              { status: 404 },
-            );
-          }
-
-          const result = await importCanvasCourseToSupabase({
-            client: fallbackClient,
-            supabase,
-            course,
-            localCourseId: body.localCourseId,
-            weekNumbers: body.weekNumbers,
-          });
-          return NextResponse.json(result);
-        } catch (fallbackErr) {
-          console.error('[api/courses/import] local supabase fallback failed:', fallbackErr);
-        }
+      console.error('[api/courses/import] in-memory ingest failed:', err);
+      if (err instanceof CanvasError) {
+        return NextResponse.json(
+          { error: 'canvas_request_failed', status: err.status, message: err.message },
+          { status: err.status === 401 ? 401 : 502 },
+        );
       }
-
-      return NextResponse.json({ error: 'supabase_function_failed', message: formatErrorChain(err) }, { status: 502 });
-    }
-  }
-
-  try {
-    const canvasCourseId = Number(body.canvasCourseId);
-    if (!canvasCourseId || Number.isNaN(canvasCourseId)) {
       return NextResponse.json(
-        { error: 'bad_request', message: 'canvasCourseId must be numeric' },
-        { status: 400 },
+        { error: 'internal_error', message: formatErrorChain(err) },
+        { status: 500 },
       );
     }
-
-    let client;
-    try {
-      client = getCanvasClientFromEnv();
-    } catch (envErr) {
-      return NextResponse.json(
-        { error: 'config', message: envErr instanceof Error ? envErr.message : String(envErr) },
-        { status: 503 },
-      );
+  } finally {
+    if (supabase && lockAcquired) {
+      try {
+        await releaseCourseImportLock(supabase, lockCourseId);
+      } catch (err) {
+        console.error('[api/courses/import] failed to release import lock:', err);
+      }
     }
-
-    const courses = await client.getActiveCourses();
-    const course = courses.find((c) => c.id === canvasCourseId);
-    if (!course) {
-      return NextResponse.json(
-        { error: 'not_found', message: 'Course not in active Canvas enrollment' },
-        { status: 404 },
-      );
-    }
-
-    const corpus = await ingestCourse(client, {
-      id: course.id,
-      code: course.course_code || course.name,
-      name: course.name,
-    });
-
-    return NextResponse.json({
-      ok: true,
-      backend: 'in-memory',
-      courseId: corpus.courseId,
-      documentsCount: corpus.documents.length,
-      chunksCount: corpus.chunks.length,
-      skippedCount: corpus.skipped.length,
-      embeddingModel: corpus.embeddingModel,
-      ingestedAt: corpus.ingestedAt,
-    });
-  } catch (err) {
-    console.error('[api/courses/import] in-memory ingest failed:', err);
-    if (err instanceof CanvasError) {
-      return NextResponse.json(
-        { error: 'canvas_request_failed', status: err.status, message: err.message },
-        { status: err.status === 401 ? 401 : 502 },
-      );
-    }
-    return NextResponse.json(
-      { error: 'internal_error', message: formatErrorChain(err) },
-      { status: 500 },
-    );
   }
 }

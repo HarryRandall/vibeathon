@@ -3,9 +3,10 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import CanvasModulesList from '@/components/canvas/modules-list';
 import { getCourseMeta, getAnnouncementsForCourse, getAssignmentsForCourse, getDiscussionsForCourse, getGradesForCourse, getPeopleForCourse } from '@/lib/dummy-data';
-import { COURSE_CONTENT_SECTIONS, type CourseContentSection, getCanvasModulesForCourse } from '@/lib/course-content';
+import { COURSE_CONTENT_SECTIONS, type CourseContentSection } from '@/lib/course-content';
+import { getSupabaseModulesForCourse } from '@/lib/course-modules';
 
-export default function CourseSectionPage({ params }: { params: { courseId: string; section: string } }) {
+export default async function CourseSectionPage({ params }: { params: { courseId: string; section: string } }) {
   const { courseId, section } = params;
   if (!COURSE_CONTENT_SECTIONS.includes(section as CourseContentSection)) notFound();
 
@@ -28,8 +29,17 @@ export default function CourseSectionPage({ params }: { params: { courseId: stri
 
   switch (section as CourseContentSection) {
     case 'modules': {
-      const modules = getCanvasModulesForCourse(courseId);
-      return <CanvasModulesList courseId={courseId} modules={modules} />;
+      const modules = await getSupabaseModulesForCourse(courseId);
+      return wrap(
+        'Modules',
+        modules.length ? (
+          <CanvasModulesList courseId={courseId} modules={modules} />
+        ) : (
+          <div className="mt-4 rounded-lg border border-dashed border-neutral-300 bg-neutral-50 p-6 text-sm text-neutral-700">
+            No imported week modules found for this course yet. Import the course from the admin page to sync weeks and files.
+          </div>
+        ),
+      );
     }
     case 'announcements':
       return wrap(

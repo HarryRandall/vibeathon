@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { courseHref } from '@/lib/canvas-demo';
 import { embedQuery } from './embeddings';
 
 export type SupabaseSource = {
@@ -93,12 +94,13 @@ export async function retrieveImportedSources(courseId: number | string, query: 
   return rows.map((row, index) => {
     const file = fileById.get(row.file_id);
     const week = row.week_id ? weekById.get(row.week_id) : null;
+    const assistantUrl = courseHref(String(row.course_id), 'assistant');
     return {
       index: index + 1,
       documentId: row.file_id,
       documentTitle: file?.name ?? 'Imported course source',
       moduleName: week ? week.title ?? `Week ${week.week_number}` : null,
-      url: `/courses/${row.course_id}/materials`,
+      url: assistantUrl,
       kind: file?.kind ?? 'source',
       excerpt: row.content,
       similarity: row.similarity,

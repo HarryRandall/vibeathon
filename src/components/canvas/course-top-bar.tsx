@@ -10,8 +10,10 @@ type CanvasTopBarProps = {
   isCourseShell: boolean;
   activeCourseId: string | null;
   courseMenuOpen: boolean;
+  globalNavCollapsed: boolean;
   globalTitle: string;
   onToggleCourseMenu: () => void;
+  onToggleGlobalNav: () => void;
 };
 
 type Crumb = {
@@ -74,33 +76,40 @@ export default function CanvasTopBar({
   isCourseShell,
   activeCourseId,
   courseMenuOpen,
+  globalNavCollapsed,
   globalTitle,
   onToggleCourseMenu,
+  onToggleGlobalNav,
 }: CanvasTopBarProps) {
   const crumbs = useMemo(
     () => (isCourseShell ? buildCourseCrumbs(pathname, activeCourseId) : buildGlobalCrumbs(globalTitle)),
     [activeCourseId, globalTitle, isCourseShell, pathname],
   );
 
-  const rightLabel = isCourseShell ? 'Student view' : 'Workspace';
+  const rightLabel = isCourseShell ? 'Course area' : 'Workspace';
   const rightValue = isCourseShell ? getCourseSectionLabel(pathname.split('/')[3] ?? '') ?? 'Home' : globalTitle;
+  const navToggleLabel = isCourseShell
+    ? courseMenuOpen
+      ? 'Hide Courses Navigation Menu'
+      : 'Show Courses Navigation Menu'
+    : globalNavCollapsed
+      ? 'Expand global navigation'
+      : 'Minimise global navigation';
+  const handleNavToggle = isCourseShell ? onToggleCourseMenu : onToggleGlobalNav;
 
   return (
     <div className="ic-app-nav-toggle-and-crumbs no-print">
-      {isCourseShell ? (
-        <button
-          type="button"
-          id="courseMenuToggle"
-          className="Button Button--link ic-app-course-nav-toggle"
-          aria-live="polite"
-          aria-label={courseMenuOpen ? 'Hide Courses Navigation Menu' : 'Show Courses Navigation Menu'}
-          onClick={onToggleCourseMenu}
-        >
-          <IconHamburger />
-        </button>
-      ) : (
-        <span className="ic-app-nav-toggle-spacer" aria-hidden />
-      )}
+      <button
+        type="button"
+        id="courseMenuToggle"
+        className="Button Button--link ic-app-course-nav-toggle"
+        aria-live="polite"
+        aria-label={navToggleLabel}
+        title={navToggleLabel}
+        onClick={handleNavToggle}
+      >
+        <IconHamburger />
+      </button>
 
       <div className="ic-app-crumbs ic-app-crumbs-enhanced-rubrics">
         <nav id="breadcrumbs" role="navigation" aria-label="breadcrumbs">

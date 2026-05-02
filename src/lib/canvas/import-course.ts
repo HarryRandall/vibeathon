@@ -255,6 +255,11 @@ export async function importCanvasCourseToSupabase({
 
         if (row) newlyInserted.push(row.id);
       } catch (error) {
+        const duplicateSource = typeof error === 'object' && error !== null && 'code' in error && error.code === '23505';
+        if (duplicateSource) {
+          skippedExisting += 1;
+          continue;
+        }
         const message = error instanceof Error ? error.message : String(error);
         failures.push({ source: `${item.type} ${sourceId}`, error: message });
         console.error(`Failed to import ${item.type} ${sourceId}:`, error);

@@ -289,16 +289,23 @@ body {
   margin: 0;
   padding: 0;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 4px;
   font-size: 14px;
+  min-width: 0;
 }
 
 .ic-app-crumbs li {
   display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.ic-app-crumbs li[aria-current='page'] {
+  flex: 1;
   min-width: 0;
 }
 
@@ -1322,6 +1329,10 @@ body {
   transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
 }
 
+.admin-course-row > span {
+  min-width: 0;
+}
+
 .admin-course-row:hover,
 .admin-course-row--active {
   border-color: #be830e;
@@ -1339,6 +1350,7 @@ body {
   color: #6d6456;
   font-size: 12px;
   margin-top: 3px;
+  overflow-wrap: anywhere;
 }
 
 .admin-course-row em {
@@ -1431,6 +1443,27 @@ body {
   background: rgba(255, 255, 255, 0.7);
   border-radius: 999px;
   padding: 4px 10px;
+}
+
+.admin-import-loading {
+  background: linear-gradient(180deg, #fffaf0 0%, #fff6e4 100%);
+  border: 1px solid #eed19b;
+  border-radius: 14px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+}
+
+.admin-import-loading strong {
+  color: #523900;
+  display: block;
+  font-size: 14px;
+}
+
+.admin-import-loading p {
+  color: #7a5a12;
+  font-size: 13px;
+  margin: 6px 0 0;
+  max-width: 70ch;
 }
 
 .admin-week-panel {
@@ -1742,6 +1775,12 @@ body {
   color: #b42318;
 }
 
+.admin-sync-pill--idle {
+  background: #eef4ff;
+  border-color: #b2ccff;
+  color: #175cd3;
+}
+
 .admin-link-button {
   background: transparent;
   border: none;
@@ -1755,7 +1794,8 @@ body {
 .admin-source-list {
   border: 1px solid #e4e7ec;
   border-radius: 8px;
-  overflow: hidden;
+  max-height: 540px;
+  overflow: auto;
 }
 
 .admin-source-row {
@@ -1763,6 +1803,7 @@ body {
   display: flex;
   justify-content: space-between;
   gap: 16px;
+  min-width: 0;
   padding: 12px 14px;
 }
 
@@ -1775,19 +1816,26 @@ body {
   display: block;
 }
 
+.admin-source-row > span {
+  min-width: 0;
+}
+
 .admin-source-row strong {
   color: #101828;
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .admin-source-row small {
   color: #667085;
   font-size: 12px;
   margin-top: 2px;
+  overflow-wrap: anywhere;
 }
 
 .admin-source-row em {
   border-radius: 999px;
+  flex-shrink: 0;
   font-size: 12px;
   font-style: normal;
   font-weight: 700;
@@ -1847,5 +1895,10 @@ body {
 
   .admin-workbench__grid {
     grid-template-columns: 1fr;
+  }
+
+  .admin-source-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
