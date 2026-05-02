@@ -48,12 +48,20 @@ function globalPageTitle(pathname: string): string {
 export default function CanvasShell({ children }: { children: ReactNode }) {
   const { courses, featuredCourseId } = useDashboardCourses();
   const pathname = usePathname();
-  const [courseMenuOpen, setCourseMenuOpen] = useState(true);
-  const [globalNavCollapsed, setGlobalNavCollapsed] = useState(false);
 
+  // Routes that render full-bleed without the Canvas LMS chrome.
+  // We bail BEFORE mounting CanvasShellInner so its hooks never run on these pages,
+  // which keeps the rules-of-hooks contract intact across navigations.
   if (pathname === '/landing' || pathname.startsWith('/landing/')) {
     return <>{children}</>;
   }
+
+  return <CanvasShellInner pathname={pathname}>{children}</CanvasShellInner>;
+}
+
+function CanvasShellInner({ pathname, children }: { pathname: string; children: ReactNode }) {
+  const [courseMenuOpen, setCourseMenuOpen] = useState(true);
+  const [globalNavCollapsed, setGlobalNavCollapsed] = useState(false);
 
   const toggleCourseMenu = useCallback(() => {
     setCourseMenuOpen((o) => !o);
