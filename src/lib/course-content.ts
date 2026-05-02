@@ -1,13 +1,5 @@
 import { courseHref, FEATURE_COURSE_ID } from './canvas-demo';
-import {
-  getAnnouncementsForCourse,
-  getAssignmentsForCourse,
-  getDiscussionsForCourse,
-  getGradesForCourse,
-  getModulesForCourse,
-  getPeopleForCourse,
-  getCourseMeta,
-} from './dummy-data';
+import { getCourseMeta, getModulesForCourse } from './dummy-data';
 
 export const COURSE_NAV_ITEMS = [
   { key: 'home', label: 'Home', segments: [] as string[] },
@@ -34,356 +26,261 @@ export function buildCourseSectionTabs(courseId: string) {
   }));
 }
 
-type HeroMetric = {
-  label: string;
-  value: string;
-};
-
-type ActionItem = {
-  label: string;
-  href: string;
-  description: string;
+type HomeLink = {
+  text: string;
+  href?: string;
   external?: boolean;
 };
 
-type ChecklistBlock = {
-  type: 'checklist';
-  title: string;
-  description?: string;
-  items: Array<{ text: string; href?: string; external?: boolean }>;
-};
-
-type LinkGridBlock = {
-  type: 'link-grid';
-  title: string;
-  description?: string;
-  items: ActionItem[];
-};
-
-type TableBlock = {
-  type: 'table';
-  title: string;
-  description?: string;
+type HomeTable = {
   caption?: string;
   columns: string[];
   rows: string[][];
 };
 
-type NoticeBlock = {
-  type: 'notice';
+type HomeSection = {
   title: string;
-  body: string;
-  tone?: 'neutral' | 'accent';
-  links?: ActionItem[];
+  paragraphs?: string[];
+  listItems?: HomeLink[];
+  secondaryListLabel?: string;
+  secondaryListItems?: HomeLink[];
+  table?: HomeTable;
 };
 
-export type CourseHomeBlock = ChecklistBlock | LinkGridBlock | TableBlock | NoticeBlock;
-
-export type CourseHomePageData = {
-  eyebrow: string;
-  title: string;
-  summary: string;
-  badges: string[];
-  metrics: HeroMetric[];
-  blocks: CourseHomeBlock[];
+export type CourseHomeData = {
+  heroImage: string | null;
+  sections: HomeSection[];
 };
 
-type DataTableColumn = {
-  key: string;
-  label: string;
-};
-
-type DataTableSection = {
-  type: 'table';
-  title: string;
-  intro: string;
-  columns: DataTableColumn[];
-  rows: Array<Record<string, string>>;
-  footer?: string;
-};
-
-type FeedSection = {
-  type: 'feed';
-  title: string;
-  intro: string;
-  items: Array<{
-    id: string;
-    title: string;
-    meta?: string;
-    body?: string;
-    badge?: string;
-  }>;
-};
-
-type PanelSection = {
-  type: 'panel';
-  title: string;
-  intro: string;
-  body: string;
-  bullets?: string[];
-  action?: ActionItem;
-};
-
-export type CourseSectionPageData = DataTableSection | FeedSection | PanelSection;
-
-export function getCourseHomePageData(courseId: string): CourseHomePageData | null {
+export function getCourseHomeData(courseId: string): CourseHomeData | null {
   const meta = getCourseMeta(courseId);
   if (!meta) return null;
 
   if (courseId !== FEATURE_COURSE_ID) {
-    const modules = getModulesForCourse(courseId);
-    const assignments = getAssignmentsForCourse(courseId);
-    const quickLinks: ActionItem[] = [
-      { label: 'Browse modules', href: courseHref(courseId, 'modules'), description: 'Weekly material, lecture notes, and lab sequences.' },
-      { label: 'Check announcements', href: courseHref(courseId, 'announcements'), description: 'Convenor updates and schedule changes.' },
-      { label: 'Open assignments', href: courseHref(courseId, 'assignments'), description: 'Assessment details, due dates, and submissions.' },
-      { label: 'Study Assistant', href: courseHref(courseId, 'assistant'), description: 'Summaries, Q&A, and practice support.' },
-    ];
-
     return {
-      eyebrow: meta.term,
-      title: meta.shortName,
-      summary: `${meta.courseCode} · ${meta.subtitle}. This view turns the standard course homepage into a clearer launchpad for the material you use most.`,
-      badges: ['Canvas shell', 'Student view', 'Dynamic demo content'],
-      metrics: [
-        { label: 'Current modules', value: String(modules.length) },
-        { label: 'Upcoming assessments', value: String(assignments.length) },
-        { label: 'Term', value: 'S1 2026' },
-      ],
-      blocks: [
+      heroImage: meta.image,
+      sections: [
         {
-          type: 'link-grid',
-          title: 'Start here',
-          description: 'The quickest ways into the course areas students usually need first.',
-          items: quickLinks,
-        },
-        {
-          type: 'table',
-          title: 'Module snapshot',
-          description: 'A compact overview of the current learning sequence.',
-          columns: ['Module', 'Items', 'Status'],
-          rows: modules.map((module) => [module.name, String(module.items), module.state]),
-        },
-        {
-          type: 'notice',
-          title: 'Need the full assistant workflow?',
-          body: 'The Computer Graphics course remains the fully expanded reference implementation for synced readings, quizzes, and the richer course-home layout.',
-          tone: 'accent',
-          links: [
-            {
-              label: 'Open the reference course',
-              href: courseHref(FEATURE_COURSE_ID),
-              description: 'See the most complete example in the demo app.',
-            },
+          title: 'Course overview',
+          paragraphs: [
+            `${meta.courseCode} · ${meta.subtitle}`,
+            'This course uses the same Canvas shell and data-driven rendering as the other demo pages while keeping the familiar wiki-style home layout.',
           ],
+        },
+        {
+          title: 'Quick links',
+          listItems: [
+            { text: 'Modules', href: courseHref(courseId, 'modules') },
+            { text: 'Announcements', href: courseHref(courseId, 'announcements') },
+            { text: 'Discussions', href: courseHref(courseId, 'discussions') },
+            { text: 'Assignments', href: courseHref(courseId, 'assignments') },
+            { text: 'Marks', href: courseHref(courseId, 'grades') },
+            { text: 'People', href: courseHref(courseId, 'people') },
+            { text: 'Study Assistant', href: courseHref(courseId, 'assistant') },
+          ],
+        },
+        {
+          title: 'Modules snapshot',
+          table: {
+            columns: ['Module', 'Items', 'Status'],
+            rows: getModulesForCourse(courseId).map((module) => [module.name, String(module.items), module.state]),
+          },
         },
       ],
     };
   }
 
   return {
-    eyebrow: 'First Semester, 2026',
-    title: 'Computer Graphics',
-    summary:
-      'A modern course launchpad built from the Canvas examples in Downloads. It keeps the core ANU Canvas structure, then surfaces course expectations, schedule, and study tools in reusable panels instead of raw page markup.',
-    badges: ['Featured course', 'Canvas-inspired', 'Study workflow ready'],
-    metrics: [
-      { label: 'Course codes', value: '2 streams' },
-      { label: 'Core blocks', value: '4' },
-      { label: 'Assistant', value: 'Ready' },
-    ],
-    blocks: [
+    heroImage: null,
+    sections: [
       {
-        type: 'checklist',
         title: 'How to engage with this course',
-        description: 'The essential first-run flow for a student entering the subject.',
-        items: [
-          { text: 'Read the class summary and course contacts', href: courseHref(courseId, 'people') },
-          { text: 'Read the course outline and introductory module', href: courseHref(courseId, 'modules') },
-          { text: 'Check announcements and discussions every week', href: courseHref(courseId, 'announcements') },
-          { text: 'Use modules to move through weekly content and labs', href: courseHref(courseId, 'modules') },
-          { text: 'Track assessment requirements in Assignments and Marks', href: courseHref(courseId, 'assignments') },
+        listItems: [
+          { text: 'Read your Class summary and the Course contacts', href: courseHref(courseId, 'people') },
+          { text: 'Get familiar with the information in the Course information module', href: courseHref(courseId, 'modules') },
+          { text: 'Check Announcements and Discussions regularly' },
+          { text: 'Engage with course content for each week or topic in the Modules', href: courseHref(courseId, 'modules') },
+          { text: 'Check your Assessments regularly', href: courseHref(courseId, 'assignments') },
         ],
       },
       {
-        type: 'link-grid',
-        title: 'Class summary',
-        description: 'Official ANU course handbook entries for both streams.',
-        items: [
-          {
-            label: 'COMP4610',
-            href: 'https://programsandcourses.anu.edu.au/course/COMP4610',
-            description: 'Undergraduate stream course handbook entry.',
-            external: true,
-          },
-          {
-            label: 'COMP8610',
-            href: 'https://programsandcourses.anu.edu.au/course/COMP8610',
-            description: 'Postgraduate stream course handbook entry.',
-            external: true,
-          },
-          {
-            label: 'Study Assistant',
-            href: courseHref(courseId, 'assistant'),
-            description: 'Summaries, Q&A, and revision support inside the course shell.',
-          },
-          {
-            label: 'Readings index',
-            href: courseHref(courseId, 'materials'),
-            description: 'A structured view of synced readings and source material.',
-          },
+        title: 'Course schedule and Class summary',
+        paragraphs: [
+          'Your official Class Summary provides you with key information about your course including the teaching schedule and assessment requirements. It is essential that you are familiar with the information in your Class summary listed below.',
         ],
       },
       {
-        type: 'table',
+        title: 'Class venues',
+        paragraphs: ['Attend all of:'],
+        listItems: [
+          { text: 'Lecture 1 - Tuesday, 9am to 10:30am, Dunbar Lecture Theatre - Physics Bldg' },
+          { text: 'Lecture 2 - Wednesday, 12:30pm to 2pm, Theatre 2 - Lowitja O Donoghue Cultural Centre Bldg' },
+        ],
+        secondaryListLabel: 'Attend one of:',
+        secondaryListItems: [
+          { text: 'Lab 1 - Thursday, 10am to 11am, N113 - Building 108' },
+          { text: 'Lab 2 - Thursday, 11am to 12pm, N112 - Building 108' },
+          { text: 'Lab 3 - Friday, 9am to 10am, N112 - Building 108' },
+          { text: 'Lab 4 - Friday, 12pm to 1pm, N113 - Building 108' },
+        ],
+      },
+      {
         title: 'Course schedule',
-        description: 'A weekly view derived from the existing home page and cleaned up into a reusable schedule component.',
-        caption: 'Course schedule',
-        columns: ['Week', 'Lecture', 'Activities & labs', 'Assessment'],
-        rows: [
-          ['1', 'Course overview, math review, spatial transformation', 'Orientation and setup', ''],
-          ['2', 'Rasterisation I', 'C-Lab-1 workshop · Session A', ''],
-          ['3', 'Rasterisation II', 'C-Lab-1 session B', ''],
-          ['4', 'Rasterisation III', 'C-Lab-2 workshop · Session A', 'C-Lab-1 report due'],
+        table: {
+          caption: 'Course Schedule',
+          columns: ['Week', 'Lecture', 'Activities & Computer Labs', 'Assessment'],
+          rows: [
+            ['1', 'Course overview, math review, spatial transformation', '', ''],
+            ['2', 'Rasterisation I', 'C-Lab-1 workshop; C-Lab-1 session A', ''],
+            ['3', 'Rasterisation II', 'C-Lab-1 session B', ''],
+            ['4', 'Rasterisation III', 'C-Lab-2 workshop; C-Lab-2 session A', 'C-Lab-1 report due'],
+          ],
+        },
+      },
+      {
+        title: 'Academic integrity',
+        listItems: [
+          {
+            text: 'Click here to read about the academic integrity best practice',
+            href: 'https://www.anu.edu.au/students/academic-skills/referencing-and-academic-integrity/academic-integrity-best-practice',
+            external: true,
+          },
         ],
       },
       {
-        type: 'notice',
-        title: 'Academic integrity and student support',
-        body: 'Course tools should help you study faster, not bypass the work. Follow ANU academic integrity guidance and use wellbeing services early if workload or personal circumstances start affecting progress.',
-        links: [
-          {
-            label: 'Academic integrity guidance',
-            href: 'https://www.anu.edu.au/students/academic-skills/referencing-and-academic-integrity/academic-integrity-best-practice',
-            description: 'ANU best-practice guidance.',
-            external: true,
-          },
-          {
-            label: 'Health, Safety and Wellbeing',
-            href: 'https://www.anu.edu.au/students/health-safety-wellbeing',
-            description: 'Student support services.',
-            external: true,
-          },
+        title: 'Content warning',
+        paragraphs: [
+          'At times during this course, we will engage with material involving cybercrime. You may find this challenging to engage with. We will do our best to make this course a space where we can engage respectfully and thoughtfully with difficult content.',
+          'ANU provides Health, Safety and Wellbeing services free of charge to students.',
         ],
       },
     ],
   };
 }
 
-export function getCourseSectionPageData(courseId: string, section: CourseContentSection): CourseSectionPageData {
-  switch (section) {
-    case 'modules':
-      return {
-        type: 'table',
-        title: 'Modules',
-        intro: 'Progress through the course in sequence. Each module groups readings, labs, and weekly tasks.',
-        columns: [
-          { key: 'name', label: 'Module' },
-          { key: 'items', label: 'Items' },
-          { key: 'state', label: 'Status' },
-        ],
-        rows: getModulesForCourse(courseId).map((row) => ({
-          name: row.name,
-          items: String(row.items),
-          state: row.state,
-        })),
-      };
-    case 'announcements':
-      return {
-        type: 'feed',
-        title: 'Announcements',
-        intro: 'Updates from the teaching team, grouped into reusable announcement cards.',
-        items: getAnnouncementsForCourse(courseId).map((item) => ({
-          id: item.id,
-          title: item.title,
-          meta: item.date,
-          body: item.body,
-          badge: 'Announcement',
-        })),
-      };
-    case 'discussions':
-      return {
-        type: 'feed',
-        title: 'Discussions',
-        intro: 'Community questions and course threads, rendered as a structured activity list.',
-        items: getDiscussionsForCourse(courseId).map((item) => ({
-          id: item.id,
-          title: item.topic,
-          meta: `${item.replies} replies`,
-          body: `Last activity ${item.last}`,
-          badge: 'Thread',
-        })),
-      };
-    case 'recordings':
-      return {
-        type: 'panel',
-        title: 'Class Recordings',
-        intro: 'Canvas would usually embed EchoVideo or a similar media tool here.',
-        body: 'This demo keeps recordings as structured content so the layout stays clean even before real media integration is wired in.',
-        bullets: ['Week 5 — Rasterisation (52 min)', 'Week 6 — Animation overview (48 min)', 'Lab walkthrough — C-Lab-3 (35 min)'],
-      };
-    case 'assignments':
-      return {
-        type: 'table',
-        title: 'Assignments',
-        intro: 'Assessment items are rendered from course data rather than hand-authored table markup.',
-        columns: [
-          { key: 'name', label: 'Assignment' },
-          { key: 'due', label: 'Due' },
-          { key: 'pts', label: 'Pts' },
-          { key: 'status', label: 'Status' },
-        ],
-        rows: getAssignmentsForCourse(courseId).map((row) => ({
-          name: row.name,
-          due: row.due,
-          pts: String(row.pts),
-          status: row.status,
-        })),
-      };
-    case 'grades':
-      return {
-        type: 'table',
-        title: 'Marks',
-        intro: 'A calmer, data-driven marks table with room for policy or release notes.',
-        columns: [
-          { key: 'assignment', label: 'Assignment' },
-          { key: 'score', label: 'Score' },
-          { key: 'when', label: 'Submitted / status' },
-        ],
-        rows: getGradesForCourse(courseId).map((row) => ({
-          assignment: row.assignment,
-          score: row.score,
-          when: row.when,
-        })),
-        footer: 'Final grades follow ANU policy; provisional marks remain subject to release by the convenor.',
-      };
-    case 'people':
-      return {
-        type: 'table',
-        title: 'People',
-        intro: 'Teaching staff and classmates in a reusable roster layout.',
-        columns: [
-          { key: 'role', label: 'Role' },
-          { key: 'name', label: 'Name' },
-          { key: 'email', label: 'Email' },
-        ],
-        rows: getPeopleForCourse(courseId).map((row) => ({
-          role: row.role,
-          name: row.name,
-          email: row.email,
-        })),
-      };
-    case 'ed-discussion':
-      return {
-        type: 'panel',
-        title: 'Ed Discussion',
-        intro: 'Production would usually open Ed in an LTI frame.',
-        body: 'For this demo, the course shell uses the same structured panel system to explain where that integration would sit and how students should continue technical conversations in the meantime.',
-        action: {
-          label: 'Open Canvas Discussions',
-          href: courseHref(courseId, 'discussions'),
-          description: 'Use the internal discussion area in this demo.',
-        },
-      };
+export type CanvasModuleItem = {
+  id: string;
+  title: string;
+  type: 'wiki_page' | 'discussion_topic' | 'assignment' | 'attachment' | 'quiz';
+  typeLabel: string;
+  iconClass: string;
+  href: string;
+  meta?: string;
+  points?: string;
+};
+
+export type CanvasModule = {
+  id: string;
+  name: string;
+  state: 'complete' | 'current' | 'locked';
+  items: CanvasModuleItem[];
+};
+
+function makeItem(courseId: string, id: string, title: string, type: CanvasModuleItem['type'], meta?: string, points?: string): CanvasModuleItem {
+  const iconClassMap: Record<CanvasModuleItem['type'], string> = {
+    wiki_page: 'icon-document',
+    discussion_topic: 'icon-discussion',
+    assignment: 'icon-assignment',
+    attachment: 'icon-paperclip',
+    quiz: 'icon-quiz',
+  };
+
+  const labelMap: Record<CanvasModuleItem['type'], string> = {
+    wiki_page: 'Page',
+    discussion_topic: 'Discussion Topic',
+    assignment: 'Assignment',
+    attachment: 'Attachment',
+    quiz: 'Quiz',
+  };
+
+  return {
+    id,
+    title,
+    type,
+    typeLabel: labelMap[type],
+    iconClass: iconClassMap[type],
+    href: type === 'attachment' ? courseHref(courseId, 'materials') : type === 'discussion_topic' ? courseHref(courseId, 'discussions') : courseHref(courseId, type === 'assignment' ? 'assignments' : type === 'quiz' ? 'quizzes' : ''),
+    meta,
+    points,
+  };
+}
+
+export function getCanvasModulesForCourse(courseId: string): CanvasModule[] {
+  if (courseId !== FEATURE_COURSE_ID) {
+    return getModulesForCourse(courseId).map((module, index) => ({
+      id: `${courseId}-module-${index}`,
+      name: module.name,
+      state: module.state,
+      items: [
+        makeItem(courseId, `${courseId}-item-${index}-1`, `${module.name} overview`, 'wiki_page'),
+        makeItem(courseId, `${courseId}-item-${index}-2`, `${module.name} discussion`, 'discussion_topic'),
+      ],
+    }));
   }
+
+  return [
+    {
+      id: '63209',
+      name: 'Course information',
+      state: 'complete',
+      items: [
+        makeItem(courseId, '354640', 'Home', 'wiki_page'),
+        makeItem(courseId, '354641', 'Welcome', 'wiki_page'),
+        makeItem(courseId, '354642', 'Class summary', 'wiki_page'),
+        makeItem(courseId, '354643', 'Course contacts', 'wiki_page'),
+        makeItem(courseId, '354646', 'Course Q&A', 'discussion_topic'),
+      ],
+    },
+    {
+      id: '63210',
+      name: 'Assessments',
+      state: 'current',
+      items: [
+        makeItem(courseId, '354647', 'Course assessment information', 'wiki_page'),
+        makeItem(courseId, '354648', 'Assessment extensions and Extenuating circumstances application (ECA)', 'wiki_page'),
+        makeItem(courseId, '475480', 'Midsem Test', 'wiki_page', '', '15'),
+      ],
+    },
+    {
+      id: '85891',
+      name: 'Assignment 1',
+      state: 'current',
+      items: [
+        makeItem(courseId, '483834', 'Assignment Information', 'wiki_page'),
+        makeItem(courseId, '483839', 'Assignment 1 - Report', 'assignment', '', '13.5'),
+        makeItem(courseId, '483847', 'Assignment 1 - Artefact', 'quiz', '', '1.5'),
+        makeItem(courseId, '483849', 'assessment-guidelines.pdf', 'attachment'),
+      ],
+    },
+    {
+      id: '63211',
+      name: 'Week 1: Introduction',
+      state: 'complete',
+      items: [makeItem(courseId, '354649', 'Week 1: Introduction', 'wiki_page')],
+    },
+    {
+      id: '80967',
+      name: 'Week 2: Identification and Authentication and Access Control',
+      state: 'complete',
+      items: [makeItem(courseId, '442124', 'Week 2: Identification and Authentication and Access Control', 'wiki_page')],
+    },
+    {
+      id: '84444',
+      name: 'Week 3: Reference Monitor and Usenix Security',
+      state: 'current',
+      items: [makeItem(courseId, '466528', 'Week 3: Reference Monitor and Usenix Security', 'wiki_page')],
+    },
+    {
+      id: '85207',
+      name: 'Week 4: Software Security',
+      state: 'current',
+      items: [makeItem(courseId, '474357', 'Week 4: Software Security', 'wiki_page')],
+    },
+    {
+      id: '85413',
+      name: 'Week 5: Introduction To Cryptography',
+      state: 'locked',
+      items: [makeItem(courseId, '476889', 'Week 5: Introduction to Cryptography', 'wiki_page')],
+    },
+  ];
 }
