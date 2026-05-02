@@ -69,8 +69,13 @@ body {
 .ic-app-header__main-navigation {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
+  /* Grow to fill the rail, but never shrink below the items' natural
+     height. With the previous `flex: 1; min-height: 0`, a short
+     viewport let main-nav collapse and the last item (Help) overflowed
+     downward into the secondary nav, visually overlapping the toggle
+     button. The rail itself (.ic-app-header) already has overflow-y:
+     auto, so global scroll is preserved. */
+  flex: 1 0 auto;
   align-items: stretch;
 }
 
@@ -210,6 +215,9 @@ body {
   /* Match the rail background so the divider above the nav toggle
      stays inside the black rail and doesn't reveal the page below. */
   background: var(--ic-brand-global-nav-bgd);
+  /* Lock the toggle row to its natural height so it can't shrink and
+     get visually pulled up under the last main-nav item. */
+  flex-shrink: 0;
 }
 
 .ic-app-header__menu-list-link--nav-toggle .ic-icon-svg {
