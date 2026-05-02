@@ -193,8 +193,10 @@ export async function ingestCourse(
   setProgress({ step: "chunking", documentsCount: documents.length });
 
   const chunks: Chunk[] = [];
+  const docOffsets: { docId: string; start: number; end: number }[] = [];
   for (const doc of documents) {
     const pieces = chunkText(doc.text);
+    const start = chunks.length;
     pieces.forEach((text, idx) => {
       chunks.push({
         id: `${doc.id}-${idx}`,
@@ -203,19 +205,66 @@ export async function ingestCourse(
         text,
       });
     });
+    docOffsets.push({ docId: doc.id, start, end: chunks.length });
   }
 
-  setProgress({ step: `embedding ${chunks.length} chunks`, chunksCount: chunks.length });
-  const embeddings = await embedTexts(chunks.map((c) => c.text));
+  setProgress({ step: `embedding 0/${chunks.length} chunks`, chunksCount: chunks.length });
+
+  const embeddings: Float32Array[] = new Array(chunks.length);
+  const keptDocIds = new Set<string>();
+  let embeddedCount = 0;
+
+  for (const span of docOffsets) {
+    const slice = chunks.slice(span.start, span.end).map((c) => c.text);
+    if (slice.length === 0) continue;
+    try {
+      const vectors = await embedTexts(slice);
+      for (let i = 0; i < vectors.length; i++) {
+        embeddings[span.start + i] = vectors[i];
+      }
+      keptDocIds.add(span.docId);
+      embeddedCount += slice.length;
+      setProgress({ step: `embedding ${embeddedCount}/${chunks.length} chunks`, chunksCount: chunks.length });
+    } catch (err) {
+      console.error(`[ingest] embedding failed for ${span.docId}:`, err);
+      const docTitle = documents.find((d) => d.id === span.docId)?.title ?? span.docId;
+      skipped.push({
+        itemTitle: docTitle,
+        reason: `embedding failed (${err instanceof Error ? err.message : String(err)})`,
+      });
+    }
+  }
+
+  const finalDocuments = documents.filter((d) => keptDocIds.has(d.id));
+  const finalChunks: Chunk[] = [];
+  const finalEmbeddings: Float32Array[] = [];
+  for (const span of docOffsets) {
+    if (!keptDocIds.has(span.docId)) continue;
+    for (let i = span.start; i < span.end; i++) {
+      const v = embeddings[i];
+      if (!v) continue;
+      finalChunks.push(chunks[i]);
+      finalEmbeddings.push(v);
+    }
+  }
+
+  if (finalDocuments.length === 0) {
+    setProgress({
+      status: "error",
+      error: "No materials could be indexed (all documents failed embedding). Check the server console for details.",
+      finishedAt: new Date().toISOString(),
+    });
+    throw new Error("No materials could be indexed.");
+  }
 
   const corpus: CourseCorpus = {
     courseId: course.id,
     courseCode: course.code,
     courseName: course.name,
     ingestedAt: new Date().toISOString(),
-    documents,
-    chunks,
-    embeddings,
+    documents: finalDocuments,
+    chunks: finalChunks,
+    embeddings: finalEmbeddings,
     embeddingModel: "text-embedding-3-small",
     skipped,
   };
@@ -224,8 +273,8 @@ export async function ingestCourse(
     status: "ready",
     step: "ready",
     finishedAt: new Date().toISOString(),
-    documentsCount: documents.length,
-    chunksCount: chunks.length,
+    documentsCount: finalDocuments.length,
+    chunksCount: finalChunks.length,
   });
   return corpus;
 }

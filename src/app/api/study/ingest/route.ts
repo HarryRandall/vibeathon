@@ -55,6 +55,7 @@ export async function POST(req: Request) {
         { status: err.status === 401 ? 401 : 502 },
       );
     }
+    console.error("[api/study/ingest] failed:", err);
     return NextResponse.json(
       {
         error: "internal_error",

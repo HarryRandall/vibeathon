@@ -12,7 +12,6 @@ export const COURSE_NAV_ITEMS = [
   { key: 'assignments', label: 'Assignments', segments: ['assignments'] },
   { key: 'grades', label: 'Marks', segments: ['grades'] },
   { key: 'people', label: 'People', segments: ['people'] },
-  { key: 'quizzes', label: 'Practice quizzes', segments: ['quizzes'] },
   { key: 'ed-discussion', label: 'Ed Discussion', segments: ['ed-discussion'] },
 ] as const;
 
@@ -199,7 +198,7 @@ function makeItem(courseId: string, id: string, title: string, type: CanvasModul
     type,
     typeLabel: labelMap[type],
     iconClass: iconClassMap[type],
-    href: type === 'attachment' ? courseHref(courseId, 'materials') : type === 'discussion_topic' ? courseHref(courseId, 'discussions') : courseHref(courseId, type === 'assignment' ? 'assignments' : type === 'quiz' ? 'quizzes' : ''),
+    href: type === 'attachment' ? courseHref(courseId, 'materials') : type === 'discussion_topic' ? courseHref(courseId, 'discussions') : courseHref(courseId, type === 'assignment' ? 'assignments' : type === 'quiz' ? 'assistant?tab=quiz' : ''),
     meta,
     points,
   };

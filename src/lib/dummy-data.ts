@@ -120,7 +120,7 @@ export type HistoryRow = { id: string; label: string; href: string; when: string
 
 export const DEMO_HISTORY: HistoryRow[] = [
   { id: 'h1', label: 'Computer Graphics — Home', href: '/courses/7624', when: 'Today, 8:14 am' },
-  { id: 'h2', label: 'Practice quizzes', href: '/courses/7624/quizzes', when: 'Today, 8:02 am' },
+  { id: 'h2', label: 'Practice quiz — Study Assistant', href: '/courses/7624/assistant?tab=quiz', when: 'Today, 8:02 am' },
   { id: 'h3', label: 'Dashboard', href: '/', when: 'Yesterday, 6:40 pm' },
   { id: 'h4', label: 'Deep Learning — Modules', href: '/courses/8594/modules', when: 'Yesterday, 4:15 pm' },
 ];
