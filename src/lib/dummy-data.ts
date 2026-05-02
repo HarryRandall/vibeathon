@@ -60,7 +60,7 @@ export type GroupRow = { id: string; name: string; courseLabel: string; href: st
 
 export const DEMO_GROUPS: GroupRow[] = [
   { id: '1526', name: 'Presentation Group 11', courseLabel: 'COMP4130', href: '/groups/1526' },
-  { id: '9489', name: 'GROUP selection 2: APAC Partners', courseLabel: 'CBEA3001', href: '/groups/9489' },
+  { id: '9489', name: 'GROUP selection 2: APAC Partners', courseLabel: 'COMP4528', href: '/groups/9489' },
   { id: '16789', name: 'Projects 15', courseLabel: 'COMP4528', href: '/groups/16789' },
   { id: '18943', name: 'Team “Gundam”', courseLabel: 'COMP4610', href: '/groups/18943' },
 ];

@@ -19,15 +19,6 @@ export type DashboardCourseCard = {
 /** Subset aligned with Canvas dashboard_cards / planner demo data. */
 export const DASHBOARD_COURSES: DashboardCourseCard[] = [
   {
-    id: '8878',
-    courseCode: 'CBEA3001/WILC6001',
-    shortName: 'CBEA Special Industry Project',
-    term: 'First Semester, 2026',
-    subtitle: 'enrolled as: Student',
-    color: '#008400',
-    image: null,
-  },
-  {
     id: '7624',
     courseCode: 'COMP4610/COMP8610',
     shortName: 'Computer Graphics',
