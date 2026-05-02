@@ -1319,7 +1319,16 @@ body {
   gap: 16px;
   padding: 14px;
   text-align: left;
+  /* Allow flex children to shrink below their intrinsic content width
+     so long course codes wrap inside the 330px grid track instead of
+     overflowing into the right panel. */
+  min-width: 0;
   transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
+}
+
+.admin-course-row > span {
+  flex: 1;
+  min-width: 0;
 }
 
 .admin-course-row:hover,
@@ -1333,6 +1342,13 @@ body {
 .admin-course-row small,
 .admin-course-row em {
   display: block;
+}
+
+.admin-course-row strong,
+.admin-course-row small {
+  /* Break very long slash-separated course codes so they don't overflow. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .admin-course-row small {
@@ -1676,6 +1692,9 @@ body {
 .admin-workbench__main {
   display: grid;
   gap: 18px;
+  /* Prevent grid items from forcing the right track wider than its 1fr
+     allocation — content inside (e.g. status chips, week tiles) must wrap. */
+  min-width: 0;
 }
 
 .admin-panel {
@@ -1683,6 +1702,7 @@ body {
   border: 1px solid #d8dee8;
   border-radius: 8px;
   padding: 18px;
+  min-width: 0;
 }
 
 .admin-panel--operation {
