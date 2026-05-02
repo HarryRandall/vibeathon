@@ -28,7 +28,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'bad_request', message: 'courseId required' }, { status: 400 });
   }
 
-  const [filesAll, chunksCount, summariesCount, topFiles] = await Promise.all([
+  const [filesAll, chunksCount, summariesCount, topFiles, failedSamples] = await Promise.all([
     supabase.from('course_files').select('id, status', { count: 'exact' }).eq('course_id', courseId),
     supabase.from('content_chunks').select('id', { count: 'exact', head: true }).eq('course_id', courseId),
     supabase
@@ -40,6 +40,13 @@ export async function GET(req: Request) {
       .select('file_id, course_files!inner(name)', { count: 'exact' })
       .eq('course_id', courseId)
       .limit(2000),
+    supabase
+      .from('course_files')
+      .select('id, name, mime_type, file_size, error')
+      .eq('course_id', courseId)
+      .eq('status', 'failed')
+      .order('processed_at', { ascending: false })
+      .limit(20),
   ]);
 
   const statusBreakdown: Record<string, number> = {};
@@ -59,6 +66,16 @@ export async function GET(req: Request) {
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 
+  // Group failed-file errors so the user can see WHY things keep failing.
+  const failedReasons = new Map<string, { count: number; samples: string[] }>();
+  for (const row of (failedSamples.data ?? []) as Array<{ name: string; mime_type: string | null; file_size: number | null; error: string | null }>) {
+    const reason = (row.error ?? 'unknown').slice(0, 160);
+    const entry = failedReasons.get(reason) ?? { count: 0, samples: [] };
+    entry.count += 1;
+    if (entry.samples.length < 3) entry.samples.push(row.name);
+    failedReasons.set(reason, entry);
+  }
+
   return NextResponse.json({
     courseId,
     files: {
@@ -68,5 +85,8 @@ export async function GET(req: Request) {
     contentChunks: chunksCount.count ?? 0,
     fileSummaries: summariesCount.count ?? 0,
     topFilesByChunks,
+    failedReasons: [...failedReasons.entries()]
+      .map(([reason, info]) => ({ reason, count: info.count, samples: info.samples }))
+      .sort((a, b) => b.count - a.count),
   });
 }
