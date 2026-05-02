@@ -1,12 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CanvasClient } from '@/lib/canvas/client';
-import type { CanvasCourse, CanvasModule } from '@/lib/canvas/types';
-import { functionsUrl, serviceAuthHeader } from '@/lib/supabase-admin';
+import type { CanvasCourse, CanvasModule, CanvasUserProfile } from '@/lib/canvas/types';
+import { anonymise, stripHtml, type AnonymiseContext } from '@/lib/canvas/anonymise';
+import { processFiles, type ProcessEvent } from '@/lib/processing/process-file';
 
 const BUCKET = 'course-content';
 const ALLOWED_TYPES = new Set(['File', 'Page', 'Assignment']);
+const MAX_WEEK_NUMBER = 200;
 
-function parseWeekNumber(name: string): number | null {
+function parseExplicitWeekNumber(name: string): number | null {
   const match = name.match(/week\s*(\d{1,2})/i);
   return match ? Number(match[1]) : null;
 }
@@ -19,27 +21,6 @@ function kindFromName(name: string): string {
   if (normalized.includes('transcript')) return 'transcript';
   if (normalized.endsWith('.zip')) return 'zip';
   return 'other';
-}
-
-function stripHtml(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function anonymiseNonCourseText(text: string): string {
-  return text
-    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email removed]')
-    .replace(/\bu\d{6,8}\b/gi, '[student id removed]')
-    .replace(/\b\d{7,9}\b/g, '[id removed]')
-    .replace(/\b(mark|grade|score)\s*[:=]\s*\d+(\.\d+)?\s*%?/gi, '$1: [removed]');
 }
 
 function textBytes(text: string): Uint8Array {
@@ -62,18 +43,29 @@ async function sourceExists(supabase: SupabaseClient, courseId: string, sourceTy
   return Boolean(existing.data);
 }
 
-async function dispatchProcessing(fileIds: string[]) {
-  for (const fileId of fileIds) {
-    fetch(functionsUrl('process-file'), {
-      method: 'POST',
-      headers: {
-        ...serviceAuthHeader(),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ fileId }),
-    }).catch((error) => console.error('process-file dispatch failed', error));
-  }
-}
+export type ImportEventKind =
+  | 'course'
+  | 'modules-fetched'
+  | 'week'
+  | 'item-skipped'
+  | 'file-downloading'
+  | 'file-saved'
+  | 'item-failed'
+  | 'process'
+  | 'done';
+
+export type ImportEvent = {
+  kind: ImportEventKind;
+  message?: string;
+  weekId?: string | null;
+  weekNumber?: number | null;
+  weekTitle?: string | null;
+  fileId?: string;
+  fileName?: string;
+  source?: string;
+  total?: number;
+  processed?: ProcessEvent;
+};
 
 export type ImportCanvasCourseOptions = {
   client: CanvasClient;
@@ -81,6 +73,17 @@ export type ImportCanvasCourseOptions = {
   course: CanvasCourse;
   localCourseId?: string;
   weekNumbers?: number[];
+  onEvent?: (event: ImportEvent) => void;
+};
+
+export type ImportCanvasCourseResult = {
+  courseId: string;
+  weeks: number;
+  newFiles: number;
+  skippedExisting: number;
+  failures: { source: string; error: string }[];
+  processed: { ok: number; failed: number };
+  backend: 'node-supabase';
 };
 
 export async function importCanvasCourseToSupabase({
@@ -89,8 +92,24 @@ export async function importCanvasCourseToSupabase({
   course,
   localCourseId,
   weekNumbers,
-}: ImportCanvasCourseOptions) {
+  onEvent,
+}: ImportCanvasCourseOptions): Promise<ImportCanvasCourseResult> {
   const courseIdLocal = String(localCourseId ?? course.id);
+  const emit = (event: ImportEvent) => onEvent?.(event);
+
+  let userProfile: CanvasUserProfile | null = null;
+  try {
+    userProfile = await client.getSelf();
+  } catch (err) {
+    console.warn('[import-course] could not fetch /users/self for anonymiser:', err);
+  }
+
+  const anonContext: AnonymiseContext = {
+    userName: userProfile?.name,
+    userShortName: userProfile?.short_name,
+  };
+
+  emit({ kind: 'course', message: course.name });
 
   const courseUpsert = await supabase.from('courses').upsert(
     {
@@ -105,19 +124,39 @@ export async function importCanvasCourseToSupabase({
   if (courseUpsert.error) throw courseUpsert.error;
 
   const modules: CanvasModule[] = await client.getCourseModules(course.id);
+  emit({ kind: 'modules-fetched', total: modules.length });
+
   const selectedWeeks =
     Array.isArray(weekNumbers) && weekNumbers.length
       ? new Set(weekNumbers.map((value) => Number(value)).filter((value) => Number.isFinite(value)))
       : null;
+
   const weekByModuleId = new Map<number, string>();
-  const weekNumberByModuleId = new Map<number, number | null>();
+  const weekNumberByModuleId = new Map<number, number>();
+  const usedWeekNumbers = new Set<number>();
 
+  // First pass: assign explicit Week N where present, claim those numbers.
+  const explicitAssignments = new Map<number, number>();
   for (const module of modules) {
-    const weekNumber = parseWeekNumber(module.name);
-    weekNumberByModuleId.set(module.id, weekNumber);
-    if (!weekNumber) continue;
+    const explicit = parseExplicitWeekNumber(module.name);
+    if (explicit && !usedWeekNumbers.has(explicit)) {
+      explicitAssignments.set(module.id, explicit);
+      usedWeekNumbers.add(explicit);
+    }
+  }
 
-    const { data, error } = await supabase
+  // Second pass: every module gets a slot; fall back to position-based number.
+  for (const module of modules) {
+    let weekNumber = explicitAssignments.get(module.id);
+    if (!weekNumber) {
+      let candidate = module.position && module.position > 0 ? module.position : 1;
+      while (usedWeekNumbers.has(candidate) && candidate < MAX_WEEK_NUMBER) candidate += 1;
+      weekNumber = candidate;
+      usedWeekNumbers.add(candidate);
+    }
+    weekNumberByModuleId.set(module.id, weekNumber);
+
+    const upsert = await supabase
       .from('course_weeks')
       .upsert(
         {
@@ -132,16 +171,24 @@ export async function importCanvasCourseToSupabase({
       .select('id')
       .single();
 
-    if (error) throw error;
-    if (data) weekByModuleId.set(module.id, data.id);
+    if (upsert.error) throw upsert.error;
+    if (upsert.data) {
+      weekByModuleId.set(module.id, upsert.data.id);
+      emit({
+        kind: 'week',
+        weekId: upsert.data.id,
+        weekNumber,
+        weekTitle: module.name,
+      });
+    }
   }
 
-  const newlyInserted: string[] = [];
+  const newlyInserted: { id: string; name: string; weekId: string | null }[] = [];
   const failures: { source: string; error: string }[] = [];
   let skippedExisting = 0;
 
   for (const module of modules) {
-    const weekNumber = weekNumberByModuleId.get(module.id) ?? null;
+    const weekNumber = weekNumberByModuleId.get(module.id);
     if (selectedWeeks && (!weekNumber || !selectedWeeks.has(weekNumber))) continue;
 
     const items = await client.getModuleItems(course.id, module.id);
@@ -158,16 +205,20 @@ export async function importCanvasCourseToSupabase({
       }
 
       try {
-        let row: { id: string } | null = null;
+        let row: { id: string; name: string } | null = null;
 
         if (item.type === 'File' && item.content_id) {
           const meta = await client.getFile(item.content_id);
+          emit({ kind: 'file-downloading', fileName: meta.display_name, weekId, source: sourceType });
           const fileData = await client.download(meta.url);
           const storagePath = `${courseIdLocal}/files/${meta.id}_${safePathPart(meta.filename)}`;
 
           const upload = await supabase.storage
             .from(BUCKET)
-            .upload(storagePath, fileData.buffer, { contentType: fileData.contentType ?? meta['content-type'], upsert: true });
+            .upload(storagePath, fileData.buffer, {
+              contentType: fileData.contentType ?? meta['content-type'],
+              upsert: true,
+            });
           if (upload.error) throw upload.error;
 
           const inserted = await supabase
@@ -185,15 +236,16 @@ export async function importCanvasCourseToSupabase({
               source_id: sourceId,
               status: 'pending',
             })
-            .select('id')
+            .select('id, name')
             .single();
           if (inserted.error) throw inserted.error;
           row = inserted.data;
         } else if (item.type === 'Page') {
           const pageUrl = item.page_url ?? item.url?.split('/pages/').pop();
           if (!pageUrl) continue;
+          emit({ kind: 'file-downloading', fileName: item.title, weekId, source: sourceType });
           const page = await client.getPage(course.id, pageUrl);
-          const text = anonymiseNonCourseText(stripHtml(page.body ?? ''));
+          const text = anonymise(stripHtml(page.body ?? ''), anonContext);
           if (!text) continue;
 
           const storagePath = `${courseIdLocal}/pages/${safePathPart(page.url)}.txt`;
@@ -217,13 +269,14 @@ export async function importCanvasCourseToSupabase({
               source_id: sourceId,
               status: 'pending',
             })
-            .select('id')
+            .select('id, name')
             .single();
           if (inserted.error) throw inserted.error;
           row = inserted.data;
         } else if (item.type === 'Assignment' && item.content_id) {
+          emit({ kind: 'file-downloading', fileName: item.title, weekId, source: sourceType });
           const assignment = await client.getAssignment(course.id, item.content_id);
-          const text = anonymiseNonCourseText(stripHtml(assignment.description ?? ''));
+          const text = anonymise(stripHtml(assignment.description ?? ''), anonContext);
           if (!text) continue;
 
           const storagePath = `${courseIdLocal}/assignments/${assignment.id}_${safePathPart(assignment.name)}.txt`;
@@ -247,27 +300,41 @@ export async function importCanvasCourseToSupabase({
               source_id: sourceId,
               status: 'pending',
             })
-            .select('id')
+            .select('id, name')
             .single();
           if (inserted.error) throw inserted.error;
           row = inserted.data;
         }
 
-        if (row) newlyInserted.push(row.id);
+        if (row) {
+          newlyInserted.push({ id: row.id, name: row.name, weekId });
+          emit({ kind: 'file-saved', fileId: row.id, fileName: row.name, weekId });
+        }
       } catch (error) {
-        const duplicateSource = typeof error === 'object' && error !== null && 'code' in error && error.code === '23505';
+        const duplicateSource =
+          typeof error === 'object' && error !== null && 'code' in error && (error as { code?: string }).code === '23505';
         if (duplicateSource) {
           skippedExisting += 1;
           continue;
         }
         const message = error instanceof Error ? error.message : String(error);
         failures.push({ source: `${item.type} ${sourceId}`, error: message });
-        console.error(`Failed to import ${item.type} ${sourceId}:`, error);
+        emit({ kind: 'item-failed', source: `${item.type} ${sourceId}`, message });
       }
     }
   }
 
-  await dispatchProcessing(newlyInserted);
+  const processedSummary = await processFiles({
+    supabase,
+    fileIds: newlyInserted.map((f) => f.id),
+    anonymise: anonContext,
+    onEvent: (event) => emit({ kind: 'process', processed: event }),
+  });
+
+  emit({
+    kind: 'done',
+    message: `processed ${processedSummary.ok}/${newlyInserted.length} files`,
+  });
 
   return {
     courseId: courseIdLocal,
@@ -275,6 +342,7 @@ export async function importCanvasCourseToSupabase({
     newFiles: newlyInserted.length,
     skippedExisting,
     failures,
+    processed: processedSummary,
     backend: 'node-supabase',
   };
 }

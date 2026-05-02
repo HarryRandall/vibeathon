@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { readSseEvents } from '@/lib/sse-client';
 
 type ImportStatus = {
   imported: boolean;
@@ -33,6 +34,48 @@ type CourseWeeks = {
 
 type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 type ImportPhase = 'idle' | 'importing' | 'success' | 'error';
+
+type ActivityPhase =
+  | 'queued'
+  | 'downloading'
+  | 'saved'
+  | 'extracting'
+  | 'summarising'
+  | 'embedding'
+  | 'ready'
+  | 'skipped'
+  | 'failed';
+
+type ActivityRow = {
+  key: string;
+  fileId?: string;
+  name: string;
+  weekTitle: string | null;
+  phase: ActivityPhase;
+  detail?: string;
+  chunks?: number;
+  updatedAt: number;
+};
+
+const PHASE_LABEL: Record<ActivityPhase, string> = {
+  queued: 'Queued',
+  downloading: 'Downloading',
+  saved: 'Saved',
+  extracting: 'Extracting',
+  summarising: 'Summarising',
+  embedding: 'Embedding',
+  ready: 'Ready',
+  skipped: 'Skipped',
+  failed: 'Failed',
+};
+
+const CACHE_TTL_MS = 5 * 60 * 1000;
+let coursesCache: { data: CanvasCourse[]; timestamp: number } | null = null;
+const detailsCache = new Map<number, { data: CourseWeeks; timestamp: number }>();
+
+function isFresh(timestamp: number) {
+  return Date.now() - timestamp < CACHE_TTL_MS;
+}
 
 function statusCopy(status: ImportStatus) {
   if (status?.importing) return 'Importing';
@@ -81,20 +124,32 @@ export default function AdminPage() {
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
   const [uploadMessage, setUploadMessage] = useState('');
 
+  const [activity, setActivity] = useState<ActivityRow[]>([]);
+  const [importLog, setImportLog] = useState<string[]>([]);
+  const importAbortRef = useRef<AbortController | null>(null);
+
   const selectedCourse = useMemo(
     () => courses.find((course) => course.id === selectedCourseId) ?? courses[0] ?? null,
     [courses, selectedCourseId],
   );
 
-  async function loadCourses(silent = false) {
+  async function loadCourses(silent = false, force = false) {
+    if (!force && coursesCache && isFresh(coursesCache.timestamp)) {
+      setCourses(coursesCache.data);
+      setSelectedCourseId((current) => current ?? coursesCache!.data[0]?.id ?? null);
+      if (!silent) setLoading(false);
+      return;
+    }
     if (!silent) setLoading(true);
     setError('');
     try {
       const res = await fetch('/api/courses/list-canvas', { cache: 'no-store' });
       const data = await readJsonResponse<{ courses?: CanvasCourse[] }>(res);
       if (!res.ok) throw new Error(data.error ?? 'Could not load Canvas courses');
-      setCourses(data.courses ?? []);
-      setSelectedCourseId((current) => current ?? data.courses?.[0]?.id ?? null);
+      const list = data.courses ?? [];
+      coursesCache = { data: list, timestamp: Date.now() };
+      setCourses(list);
+      setSelectedCourseId((current) => current ?? list[0]?.id ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -102,7 +157,15 @@ export default function AdminPage() {
     }
   }
 
-  async function loadDetails(courseId: number, resetSelection = true) {
+  async function loadDetails(courseId: number, resetSelection = true, force = false) {
+    const cached = detailsCache.get(courseId);
+    if (!force && cached && isFresh(cached.timestamp)) {
+      setDetails(cached.data);
+      if (resetSelection) {
+        setSelectedWeeks(new Set(cached.data.weeks.map((week) => week.week_number)));
+      }
+      return;
+    }
     if (resetSelection) {
       setDetails(null);
       setSelectedWeeks(new Set());
@@ -117,7 +180,9 @@ export default function AdminPage() {
       if (!res.ok) throw new Error(data.error ?? 'Could not load imported weeks');
       importedWeeks = data.weeks ?? [];
       importedFiles = data.files ?? [];
-      setDetails({ ...data, weeks: importedWeeks, files: importedFiles });
+      const next = { ...data, weeks: importedWeeks, files: importedFiles };
+      detailsCache.set(courseId, { data: next, timestamp: Date.now() });
+      setDetails(next);
       if (resetSelection) setSelectedWeeks(new Set(importedWeeks.map((week) => week.week_number)));
     } catch (err) {
       setDetails({ courseId: String(courseId), weeks: [], files: [] });
@@ -129,12 +194,14 @@ export default function AdminPage() {
       const res = await fetch(`/api/courses/${courseId}/canvas-weeks`, { cache: 'no-store' });
       const data = await readJsonResponse<CourseWeeks>(res);
       if (!res.ok) throw new Error(data.error ?? 'Could not preview Canvas weeks');
-      setDetails({
+      const next = {
         courseId: String(courseId),
         files: importedFiles,
         weeks: data.weeks ?? [],
         supportingModules: data.supportingModules ?? [],
-      });
+      };
+      detailsCache.set(courseId, { data: next, timestamp: Date.now() });
+      setDetails(next);
       if (resetSelection) {
         setSelectedWeeks(new Set((data.weeks ?? []).map((week: CourseWeeks['weeks'][number]) => week.week_number)));
       }
@@ -151,46 +218,205 @@ export default function AdminPage() {
     if (selectedCourse) void loadDetails(selectedCourse.id);
   }, [selectedCourse?.id]);
 
+  // Fallback polling: only runs when the *server* says processing is still
+  // happening but the SSE stream isn't (e.g., page reloaded mid-import).
   useEffect(() => {
+    if (importPhase === 'importing') return;
     const hasActiveSync =
-      importPhase === 'importing' ||
       Boolean(selectedCourse?.importStatus?.importing) ||
       Boolean(selectedCourse?.importStatus?.processingFiles);
     if (!selectedCourse || !hasActiveSync) return;
     const interval = window.setInterval(() => {
       setRefreshing(true);
-      void Promise.all([loadCourses(true), loadDetails(selectedCourse.id, false)]).finally(() => setRefreshing(false));
+      void Promise.all([loadCourses(true, true), loadDetails(selectedCourse.id, false, true)]).finally(() => setRefreshing(false));
     }, 5000);
     return () => window.clearInterval(interval);
   }, [importPhase, selectedCourse?.id, selectedCourse?.importStatus?.importing, selectedCourse?.importStatus?.processingFiles]);
+
+  function appendLog(line: string) {
+    setImportLog((prev) => [...prev.slice(-200), `${new Date().toLocaleTimeString()}  ${line}`]);
+  }
+
+  function upsertActivity(key: string, patch: Partial<ActivityRow> & { name: string }) {
+    setActivity((prev) => {
+      const idx = prev.findIndex((row) => row.key === key);
+      const base: ActivityRow = idx === -1
+        ? { key, name: patch.name, weekTitle: patch.weekTitle ?? null, phase: 'queued', updatedAt: Date.now() }
+        : { ...prev[idx] };
+      const next: ActivityRow = { ...base, ...patch, updatedAt: Date.now() };
+      if (idx === -1) return [...prev, next];
+      const copy = [...prev];
+      copy[idx] = next;
+      return copy;
+    });
+  }
 
   async function importCourse(allWeeks: boolean) {
     if (!selectedCourse) return;
     setError('');
     setMessage('');
     setImportPhase('importing');
+    setActivity([]);
+    setImportLog([]);
+
+    importAbortRef.current?.abort();
+    const controller = new AbortController();
+    importAbortRef.current = controller;
+
+    const weekTitleByWeekId = new Map<string, string>();
+    type ImportSummary = {
+      newFiles?: number;
+      skippedExisting?: number;
+      failures?: { source: string; error: string }[];
+      processed?: { ok: number; failed: number };
+    };
+    type ImportServerError = { error?: string; message?: string };
+    let summaryPayload: ImportSummary | null = null;
+    let serverError: ImportServerError | null = null;
 
     try {
       const res = await fetch('/api/courses/import', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
         body: JSON.stringify({
           canvasCourseId: selectedCourse.id,
           localCourseId: String(selectedCourse.id),
           weekNumbers: allWeeks ? undefined : Array.from(selectedWeeks),
         }),
+        signal: controller.signal,
       });
-      const data = await readJsonResponse<{ newFiles?: number; skippedExisting?: number; failures?: { source: string; error: string }[] }>(res);
-      if (!res.ok) throw new Error(data.error ?? data.message ?? 'Import failed');
 
-      const failureText = data.failures?.length ? ` ${data.failures.length} source(s) failed; check logs/details.` : '';
-      setMessage(`Queued ${data.newFiles ?? 0} new source(s); ${data.skippedExisting ?? 0} already existed.${failureText}`);
+      if (!res.ok || !res.body) {
+        const data = await readJsonResponse<{ error?: string; message?: string }>(res);
+        throw new Error(data.error ?? data.message ?? `Import failed (HTTP ${res.status})`);
+      }
+
+      for await (const evt of readSseEvents(res, controller.signal)) {
+        let data: Record<string, unknown> = {};
+        try {
+          data = JSON.parse(evt.data) as Record<string, unknown>;
+        } catch {
+          continue;
+        }
+
+        switch (evt.event) {
+          case 'course':
+            appendLog(`Course: ${data.message ?? selectedCourse.name}`);
+            break;
+          case 'modules-fetched':
+            appendLog(`Found ${data.total} modules`);
+            break;
+          case 'week': {
+            const id = String(data.weekId ?? '');
+            const title = (data.weekTitle as string | null) ?? null;
+            if (id && title) weekTitleByWeekId.set(id, title);
+            appendLog(`Week ${data.weekNumber}: ${title ?? '(no title)'}`);
+            break;
+          }
+          case 'file-downloading': {
+            const weekId = (data.weekId as string | null) ?? null;
+            const key = `${weekId ?? 'none'}::${data.fileName}`;
+            upsertActivity(key, {
+              name: String(data.fileName),
+              weekTitle: weekId ? weekTitleByWeekId.get(weekId) ?? null : null,
+              phase: 'downloading',
+            });
+            break;
+          }
+          case 'file-saved': {
+            const fileId = String(data.fileId);
+            const weekId = (data.weekId as string | null) ?? null;
+            const oldKey = `${weekId ?? 'none'}::${data.fileName}`;
+            // Promote the queued row to its file id key so subsequent "process" events match.
+            setActivity((prev) => {
+              const idx = prev.findIndex((row) => row.key === oldKey);
+              if (idx === -1) {
+                return [
+                  ...prev,
+                  {
+                    key: fileId,
+                    fileId,
+                    name: String(data.fileName),
+                    weekTitle: weekId ? weekTitleByWeekId.get(weekId) ?? null : null,
+                    phase: 'saved',
+                    updatedAt: Date.now(),
+                  },
+                ];
+              }
+              const copy = [...prev];
+              copy[idx] = { ...copy[idx], key: fileId, fileId, phase: 'saved', updatedAt: Date.now() };
+              return copy;
+            });
+            break;
+          }
+          case 'item-failed':
+            appendLog(`Failed: ${data.source ?? ''} — ${data.message ?? 'unknown error'}`);
+            break;
+          case 'process': {
+            const inner = data.processed as
+              | {
+                  fileId: string;
+                  fileName: string;
+                  weekId: string | null;
+                  kind: ActivityPhase;
+                  detail?: string;
+                  chunks?: number;
+                }
+              | undefined;
+            if (!inner) break;
+            const weekTitle = inner.weekId ? weekTitleByWeekId.get(inner.weekId) ?? null : null;
+            upsertActivity(inner.fileId, {
+              fileId: inner.fileId,
+              name: inner.fileName,
+              weekTitle,
+              phase: inner.kind,
+              detail: inner.detail,
+              chunks: inner.chunks,
+            });
+            break;
+          }
+          case 'summary':
+            summaryPayload = data as unknown as ImportSummary;
+            break;
+          case 'error':
+            serverError = data as unknown as ImportServerError;
+            break;
+          case 'end':
+            break;
+          default:
+            break;
+        }
+      }
+
+      if (serverError) {
+        throw new Error(serverError.message ?? serverError.error ?? 'Import failed');
+      }
+
+      const courseLabel = selectedCourse.course_code || selectedCourse.name;
+      const newFiles = summaryPayload?.newFiles ?? 0;
+      const skipped = summaryPayload?.skippedExisting ?? 0;
+      const okProc = summaryPayload?.processed?.ok ?? 0;
+      const failedProc = summaryPayload?.processed?.failed ?? 0;
+      const failureText = summaryPayload?.failures?.length
+        ? ` ${summaryPayload.failures.length} source(s) failed during fetch.`
+        : '';
+      setMessage(
+        `Imported ${courseLabel}: ${newFiles} new source(s), ${skipped} already existed. Processed ${okProc} ready, ${failedProc} failed.${failureText}`,
+      );
       setImportPhase('success');
-      await loadCourses();
-      await loadDetails(selectedCourse.id, false);
+      coursesCache = null;
+      detailsCache.delete(selectedCourse.id);
+      await loadCourses(false, true);
+      await loadDetails(selectedCourse.id, false, true);
     } catch (err) {
+      if ((err as { name?: string })?.name === 'AbortError') {
+        setImportPhase('idle');
+        return;
+      }
       setImportPhase('error');
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      if (importAbortRef.current === controller) importAbortRef.current = null;
     }
   }
 
@@ -220,7 +446,21 @@ export default function AdminPage() {
 
   const weekOptions = details?.weeks ?? [];
   const supportingModules = details?.supportingModules ?? [];
-  const sourceRows = details?.files.slice(0, 24) ?? [];
+  const sourcesByWeek = useMemo(() => {
+    if (!details) return [] as { key: string; label: string; sortKey: number; files: CourseWeeks['files'] }[];
+    const weekMap = new Map(details.weeks.map((w) => [w.id, w]));
+    const groups = new Map<string, { key: string; label: string; sortKey: number; files: CourseWeeks['files'] }>();
+    for (const file of details.files) {
+      const week = file.week_id ? weekMap.get(file.week_id) : null;
+      const key = week?.id ?? 'unassigned';
+      const label = week ? weekLabel(week.week_number, week.title) : 'Unassigned';
+      const sortKey = week?.week_number ?? Number.MAX_SAFE_INTEGER;
+      const existing = groups.get(key);
+      if (existing) existing.files.push(file);
+      else groups.set(key, { key, label, sortKey, files: [file] });
+    }
+    return Array.from(groups.values()).sort((a, b) => a.sortKey - b.sortKey);
+  }, [details]);
   const selectedWeekCount = selectedWeeks.size;
   const activeFile = details?.activeFile ?? null;
   const importBusy = importPhase === 'importing' || Boolean(selectedCourse?.importStatus?.importing);
@@ -403,24 +643,82 @@ export default function AdminPage() {
                 ) : null}
               </section>
 
+              {(activity.length > 0 || importLog.length > 0) ? (
+                <section className="admin-panel admin-panel--activity">
+                  <div className="admin-panel__header">
+                    <h2>Live import</h2>
+                    <p>
+                      {importPhase === 'importing'
+                        ? 'Streaming progress directly from the import job.'
+                        : 'Most recent import session.'}
+                    </p>
+                  </div>
+                  {activity.length ? (
+                    <div className="admin-source-list">
+                      {activity
+                        .slice()
+                        .sort((a, b) => b.updatedAt - a.updatedAt)
+                        .slice(0, 60)
+                        .map((row) => (
+                          <div key={row.key} className="admin-source-row">
+                            <span>
+                              <strong>{row.name}</strong>
+                              <small>
+                                {row.weekTitle ?? 'Unassigned'}
+                                {row.chunks ? ` · ${row.chunks} chunks` : ''}
+                                {row.detail ? ` · ${row.detail}` : ''}
+                              </small>
+                            </span>
+                            <em data-status={row.phase}>{PHASE_LABEL[row.phase]}</em>
+                          </div>
+                        ))}
+                    </div>
+                  ) : null}
+                  {importLog.length ? (
+                    <pre
+                      style={{
+                        marginTop: '0.75rem',
+                        maxHeight: '12rem',
+                        overflow: 'auto',
+                        fontSize: '0.8rem',
+                        background: 'rgba(0,0,0,0.04)',
+                        padding: '0.5rem',
+                        whiteSpace: 'pre-wrap',
+                      }}
+                    >
+                      {importLog.slice(-50).join('\n')}
+                    </pre>
+                  ) : null}
+                </section>
+              ) : null}
+
               <section className="admin-panel admin-panel--activity">
                 <div className="admin-panel__header">
                   <h2>Source activity</h2>
                   <p>
-                    {sourceRows.length
-                      ? `Showing the most recent ${sourceRows.length} of ${details?.files.length ?? 0} imported sources.`
+                    {details?.files.length
+                      ? `${details.files.length} imported source(s) grouped by week.`
                       : 'No imported sources yet.'}
                   </p>
                 </div>
-                {sourceRows.length ? (
-                  <div className="admin-source-list">
-                    {sourceRows.map((source) => (
-                      <div key={source.id} className="admin-source-row">
-                        <span>
-                          <strong>{source.name}</strong>
-                          <small>{source.kind}</small>
-                        </span>
-                        <em data-status={source.status}>{source.status}</em>
+                {sourcesByWeek.length ? (
+                  <div className="admin-source-groups">
+                    {sourcesByWeek.map((group) => (
+                      <div key={group.key} className="admin-source-group">
+                        <h4 className="admin-source-group__title">
+                          {group.label} <small>({group.files.length})</small>
+                        </h4>
+                        <div className="admin-source-list">
+                          {group.files.map((source) => (
+                            <div key={source.id} className="admin-source-row">
+                              <span>
+                                <strong>{source.name}</strong>
+                                <small>{source.kind}</small>
+                              </span>
+                              <em data-status={source.status}>{source.status}</em>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>

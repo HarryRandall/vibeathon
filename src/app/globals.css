@@ -1814,6 +1814,31 @@ body {
   overflow: auto;
 }
 
+.admin-source-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-source-group__title {
+  align-items: baseline;
+  display: flex;
+  font-size: 14px;
+  font-weight: 700;
+  gap: 6px;
+  margin: 0 0 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #4b5563;
+}
+
+.admin-source-group__title small {
+  color: #9ca3af;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .admin-source-row {
   align-items: center;
   display: flex;

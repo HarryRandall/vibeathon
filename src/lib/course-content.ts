@@ -6,6 +6,7 @@ export const COURSE_NAV_ITEMS = [
   { key: 'modules', label: 'Modules', segments: ['modules'] },
   { key: 'announcements', label: 'Announcements', segments: ['announcements'] },
   { key: 'discussions', label: 'Discussions', segments: ['discussions'] },
+  { key: 'assistant', label: 'Study Assistant', segments: ['assistant'] },
   { key: 'recordings', label: 'Class Recordings', segments: ['recordings'] },
   { key: 'assignments', label: 'Assignments', segments: ['assignments'] },
   { key: 'grades', label: 'Marks', segments: ['grades'] },

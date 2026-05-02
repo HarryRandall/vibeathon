@@ -112,6 +112,10 @@ export class CanvasClient {
     return this.request<CanvasUserProfile>("/users/self/profile");
   }
 
+  getSelf(): Promise<CanvasUserProfile> {
+    return this.request<CanvasUserProfile>("/users/self");
+  }
+
   getActiveCourses(): Promise<CanvasCourse[]> {
     return this.request<CanvasCourse[]>("/courses", {
       query: { enrollment_state: "active", per_page: 100 },
