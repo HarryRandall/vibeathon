@@ -3,110 +3,323 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
+import { useCallback, useState } from 'react';
+import {
+  IconCalendar,
+  IconCourses,
+  IconDashboard,
+  IconGroups,
+  IconHelp,
+  IconHistory,
+  IconInbox,
+  IconNavToggle,
+  IconStudio,
+} from '@/components/canvas/canvas-icons';
 
-const nav = [
-  {
-    href: '/',
-    label: 'Dashboard',
-    icon: (
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25A2.25 2.25 0 0113.5 8.25V6zM3.75 15.75a2.25 2.25 0 012.25-2.25h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25v-2.25z" />
-      </svg>
-    ),
-  },
-  {
-    href: '/assistant',
-    label: 'Study Assistant',
-    icon: (
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
-      </svg>
-    ),
-  },
-  {
-    href: '/materials',
-    label: 'Course materials',
-    icon: (
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-      </svg>
-    ),
-  },
-  {
-    href: '/quizzes',
-    label: 'Practice quizzes',
-    icon: (
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
-      </svg>
-    ),
-  },
-] as const;
+const ANU_HEADER_LOGO =
+  'https://instructure-uploads-apse2.s3.ap-southeast-2.amazonaws.com/account_268700000000000001/attachments/1294/Primary_Horizontal_GoldBlack_v2_200x200.png';
 
-function NavLink({ href, label, icon }: { href: string; label: string; icon: ReactNode }) {
-  const pathname = usePathname();
-  const active = href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/');
+const CANVAS_AVATAR_PLACEHOLDER = 'https://canvas.anu.edu.au/images/messages/avatar-50.png';
 
-  return (
-    <Link
-      href={href}
-      className={`group flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors md:px-3 ${
-        active
-          ? 'bg-white/10 text-white ring-1 ring-anu-gold/80'
-          : 'text-slate-300 hover:bg-white/5 hover:text-white'
-      }`}
-      title={label}
-    >
-      <span className={`shrink-0 ${active ? 'text-anu-gold' : 'text-slate-400 group-hover:text-slate-200'}`}>{icon}</span>
-      <span className="hidden md:inline">{label}</span>
-    </Link>
-  );
+const COURSE_CODE = 'COMP4610/COMP8610';
+const COURSE_TITLE = 'Computer Graphics';
+const TERM_LABEL = 'First Semester, 2026';
+
+type SectionTab =
+  | { type: 'link'; label: string; href: string }
+  | { type: 'stub'; label: string };
+
+/** Mirrors canvas.anu.edu.au course nav order; adds Study Assistant + Practice quizzes for this demo. */
+const SECTION_TABS: SectionTab[] = [
+  { type: 'link', label: 'Home', href: '/' },
+  { type: 'stub', label: 'Modules' },
+  { type: 'stub', label: 'Announcements' },
+  { type: 'stub', label: 'Discussions' },
+  { type: 'link', label: 'Study Assistant', href: '/assistant' },
+  { type: 'stub', label: 'Class Recordings' },
+  { type: 'link', label: 'Readings', href: '/materials' },
+  { type: 'stub', label: 'Assignments' },
+  { type: 'stub', label: 'Marks' },
+  { type: 'stub', label: 'People' },
+  { type: 'link', label: 'Practice quizzes', href: '/quizzes' },
+  { type: 'stub', label: 'Ed Discussion' },
+];
+
+function sectionTabActive(pathname: string, tab: SectionTab): boolean {
+  if (tab.type !== 'link') return false;
+  if (tab.href === '/') return pathname === '/';
+  return pathname === tab.href || pathname.startsWith(tab.href + '/');
 }
 
 export default function CanvasShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const [courseMenuOpen, setCourseMenuOpen] = useState(true);
+
+  const toggleCourseMenu = useCallback(() => {
+    setCourseMenuOpen((o) => !o);
+  }, []);
+
   return (
-    <div className="flex min-h-screen bg-[#f5f4f1] text-anu-ink">
-      <aside
-        className="flex w-[4rem] shrink-0 flex-col border-r border-slate-700/80 bg-[#1c2533] md:w-[13.5rem]"
-        aria-label="Course navigation"
-      >
-        <div className="flex h-14 items-center justify-center border-b border-white/10 px-2 md:justify-start md:px-4">
-          <div className="flex items-center gap-2 truncate">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-anu-gold/15 text-xs font-bold text-anu-gold ring-1 ring-anu-gold/40">
-              ANU
-            </span>
-            <div className="hidden min-w-0 md:block">
-              <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-slate-400">LMS</p>
-              <p className="truncate text-sm font-semibold text-white">Study workspace</p>
+    <div id="application" className="ic-app">
+      <header id="mobile-header" className="no-print">
+        <button type="button" className="mobile-nav-btn" aria-label="Global Navigation Menu">
+          <span className="icon-hamburger-bar icon-hamburger-bar--light" />
+          <span className="icon-hamburger-bar icon-hamburger-bar--light" />
+          <span className="icon-hamburger-bar icon-hamburger-bar--light" />
+        </button>
+        <div className="mobile-header-title truncate">{COURSE_CODE}</div>
+        <button type="button" className="mobile-nav-btn" aria-label="Navigation Menu" onClick={toggleCourseMenu}>
+          ▾
+        </button>
+      </header>
+
+      <header id="header" className="ic-app-header no-print" aria-label="Global Header">
+        <a href="#content" id="skip_navigation_link">
+          Skip To Content
+        </a>
+        <div role="region" className="ic-app-header__main-navigation" aria-label="Global Navigation">
+          <div className="ic-app-header__logomark-container">
+            <Link href="/" className="ic-app-header__logomark">
+              <span className="screenreader-only">Dashboard</span>
+              <img src={ANU_HEADER_LOGO} alt="" width={120} height={40} />
+            </Link>
+          </div>
+          <ul id="menu" className="ic-app-header__menu-list">
+            <li className="menu-item ic-app-header__menu-list-item">
+              <a id="global_nav_profile_link" role="button" href="#" className="ic-app-header__menu-list-link">
+                <div className="menu-item-icon-container">
+                  <div aria-hidden className="fs-exclude ic-avatar">
+                    <img src={CANVAS_AVATAR_PLACEHOLDER} alt="Account" />
+                  </div>
+                  <span className="menu-item__badge" />
+                </div>
+                <div className="menu-item__text">Account</div>
+              </a>
+            </li>
+            <li className="ic-app-header__menu-list-item">
+              <Link id="global_nav_dashboard_link" href="/" className="ic-app-header__menu-list-link">
+                <div className="menu-item-icon-container" aria-hidden>
+                  <IconDashboard className="ic-icon-svg ic-icon-svg--dashboard" />
+                </div>
+                <div className="menu-item__text">Dashboard</div>
+              </Link>
+            </li>
+            <li className={`menu-item ic-app-header__menu-list-item ic-app-header__menu-list-item--active`}>
+              <Link id="global_nav_courses_link" href="/" className="ic-app-header__menu-list-link" aria-current="page">
+                <div className="menu-item-icon-container" aria-hidden>
+                  <IconCourses className="ic-icon-svg ic-icon-svg--courses" />
+                </div>
+                <div className="menu-item__text">Courses</div>
+              </Link>
+            </li>
+            <li className="menu-item ic-app-header__menu-list-item">
+              <a id="global_nav_groups_link" role="button" href="#" className="ic-app-header__menu-list-link">
+                <div className="menu-item-icon-container" aria-hidden>
+                  <IconGroups className="ic-icon-svg ic-icon-svg--groups" />
+                </div>
+                <div className="menu-item__text">Groups</div>
+              </a>
+            </li>
+            <li className="menu-item ic-app-header__menu-list-item">
+              <a id="global_nav_calendar_link" href="#" className="ic-app-header__menu-list-link">
+                <div className="menu-item-icon-container" aria-hidden>
+                  <IconCalendar className="ic-icon-svg ic-icon-svg--calendar" />
+                </div>
+                <div className="menu-item__text">Calendar</div>
+              </a>
+            </li>
+            <li className="menu-item ic-app-header__menu-list-item">
+              <a id="global_nav_conversations_link" href="#" className="ic-app-header__menu-list-link">
+                <div className="menu-item-icon-container">
+                  <IconInbox className="ic-icon-svg ic-icon-svg--inbox" />
+                  <span className="menu-item__badge" />
+                </div>
+                <div className="menu-item__text">Inbox</div>
+              </a>
+            </li>
+            <li className="menu-item ic-app-header__menu-list-item">
+              <a id="global_nav_history_link" role="button" href="#" className="ic-app-header__menu-list-link">
+                <div className="menu-item-icon-container" aria-hidden>
+                  <IconHistory className="ic-icon-svg menu-item__icon svg-icon-history" />
+                </div>
+                <div className="menu-item__text">History</div>
+              </a>
+            </li>
+            <li className="globalNavExternalTool menu-item ic-app-header__menu-list-item">
+              <a className="ic-app-header__menu-list-link" href="#">
+                <div className="menu-item-icon-container" aria-hidden>
+                  <IconStudio className="ic-icon-svg ic-icon-svg--lti menu-item__icon" />
+                </div>
+                <div className="menu-item__text">Studio</div>
+              </a>
+            </li>
+            <li className="ic-app-header__menu-list-item">
+              <a id="global_nav_help_link" role="button" className="ic-app-header__menu-list-link" href="#">
+                <div className="menu-item-icon-container" role="presentation">
+                  <IconHelp className="ic-icon-svg menu-item__icon svg-icon-help" />
+                  <span className="menu-item__badge" />
+                </div>
+                <div className="menu-item__text">Help</div>
+              </a>
+            </li>
+          </ul>
+        </div>
+        <div className="ic-app-header__secondary-navigation">
+          <ul className="ic-app-header__menu-list">
+            <li className="menu-item ic-app-header__menu-list-item">
+              <a
+                id="primaryNavToggle"
+                role="button"
+                href="#"
+                className="ic-app-header__menu-list-link ic-app-header__menu-list-link--nav-toggle"
+                aria-label="Minimise global navigation"
+                title="Minimise global navigation"
+              >
+                <div className="menu-item-icon-container" aria-hidden>
+                  <IconNavToggle className="ic-icon-svg ic-icon-svg--navtoggle" />
+                </div>
+              </a>
+            </li>
+          </ul>
+        </div>
+      </header>
+
+      <div id="wrapper" className="ic-Layout-wrapper">
+        <div className="ic-app-nav-toggle-and-crumbs no-print">
+          <button
+            type="button"
+            id="courseMenuToggle"
+            className="ic-app-course-nav-toggle"
+            aria-live="polite"
+            aria-label={courseMenuOpen ? 'Hide Courses Navigation Menu' : 'Show Courses Navigation Menu'}
+            onClick={toggleCourseMenu}
+          >
+            <span className="icon-hamburger-bar" />
+            <span className="icon-hamburger-bar" />
+            <span className="icon-hamburger-bar" />
+          </button>
+
+          <div className="ic-app-crumbs ic-app-crumbs-enhanced-rubrics">
+            <nav id="breadcrumbs" role="navigation" aria-label="breadcrumbs">
+              <ol>
+                <li className="home">
+                  <Link href="/">
+                    <span className="ellipsible">
+                      <span className="screenreader-only">My Dashboard</span>
+                      <span aria-hidden>🏠</span>
+                    </span>
+                  </Link>
+                </li>
+                <li id="crumb_course_demo" aria-current="page">
+                  <Link href="/">
+                    <span className="ellipsible">{COURSE_CODE}</span>
+                  </Link>
+                </li>
+              </ol>
+            </nav>
+          </div>
+        </div>
+
+        <div id="main" className="ic-Layout-columns">
+          <div className="ic-Layout-watermark" aria-hidden />
+
+          <div id="left-side" className={`ic-app-course-menu ic-sticky-on list-view ${courseMenuOpen ? '' : 'collapsed'}`}>
+            <div id="sticky-container" className="ic-sticky-frame">
+              <span id="section-tabs-header-subtitle" className="ellipsis">
+                {TERM_LABEL}
+              </span>
+              <nav role="navigation" aria-label="Courses Navigation Menu">
+                <ul id="section-tabs">
+                  {SECTION_TABS.map((tab) => {
+                    const active = sectionTabActive(pathname, tab);
+                    if (tab.type === 'stub') {
+                      return (
+                        <li key={tab.label} className="section">
+                          <a href="#" onClick={(e) => e.preventDefault()}>
+                            {tab.label}
+                          </a>
+                        </li>
+                      );
+                    }
+                    return (
+                      <li key={tab.href} className="section">
+                        <Link href={tab.href} className={active ? 'active' : undefined} aria-current={active ? 'page' : undefined}>
+                          {tab.label}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </nav>
+            </div>
+          </div>
+
+          <div id="not_right_side" className="ic-app-main-content">
+            <div id="content-wrapper" className="ic-Layout-contentWrapper">
+              <div id="content" className="ic-Layout-contentMain" role="main">
+                <div id="course_home_content">
+                  <div id="wiki_page_show">{children}</div>
+                </div>
+              </div>
+            </div>
+
+            <div id="right-side-wrapper" className="ic-app-main-content__secondary">
+              <aside id="right-side" role="complementary">
+                <div id="course_show_secondary">
+                  <div className="course-options">
+                    <a id="view_course_stream_btn" className="btn button-sidebar-wide" href="#">
+                      View Course Stream
+                    </a>
+                  </div>
+                  <a className="btn button-sidebar-wide" href="#">
+                    View Course Calendar
+                  </a>
+                  <a id="view_course_notifications_btn" className="btn button-sidebar-wide" href="#">
+                    View Course Notifications
+                  </a>
+
+                  <div className="todo-list Sidebar__TodoListContainer ic-sidebar-muted">
+                    <p>To Do list loads here in Canvas.</p>
+                  </div>
+
+                  <h2>Course Groups</h2>
+                  <ul className="unstyled_list group_list">
+                    <li>
+                      <a href="#">Team “Gundam”</a>
+                    </li>
+                  </ul>
+
+                  <div className="events_list recent_feedback">
+                    <div className="h2 shared-space">
+                      <h2>Recent Feedback</h2>
+                    </div>
+                    <ul className="right-side-list events">
+                      <li className="event">
+                        <a href="#" className="recent_feedback_icon">
+                          <i className="icon-check">✓</i>
+                          <div className="event-details">
+                            <b className="event-details__title recent_feedback_title">C-Lab-2 submission site</b>
+                            <p className="event-details__context">{COURSE_CODE}</p>
+                            <p>
+                              <strong>90 out of 100</strong>
+                            </p>
+                            <p className="ic-feedback-snippet">
+                              Task1: excellent · Task2: shading discussion could be deeper · Task3: excellent…
+                            </p>
+                          </div>
+                        </a>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <p className="ic-demo-disclaimer">
+                    Demonstration shell — not affiliated with Instructure. Brand colours mirror ANU Canvas theme.
+                  </p>
+                </div>
+              </aside>
             </div>
           </div>
         </div>
-        <nav className="flex flex-1 flex-col gap-0.5 p-2">
-          {nav.map((item) => (
-            <NavLink key={item.href} {...item} />
-          ))}
-        </nav>
-        <div className="border-t border-white/10 p-3">
-          <p className="hidden text-[10px] leading-snug text-slate-500 md:block">
-            Prototype UI — not affiliated with Instructure or Canvas.
-          </p>
-        </div>
-      </aside>
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-anu-border bg-white px-4 shadow-sm md:px-6">
-          <div className="min-w-0">
-            <p className="truncate text-xs text-slate-500">Smart study assistant</p>
-            <p className="truncate text-sm font-semibold text-slate-800">Pilot integration · Course-linked tools</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="hidden text-sm text-slate-600 sm:inline">Alex Student</span>
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600">
-              AS
-            </span>
-          </div>
-        </header>
-        <main className="flex-1 overflow-auto">{children}</main>
       </div>
     </div>
   );

@@ -8,7 +8,7 @@ const items = [
 
 export default function MaterialsPage() {
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 md:px-6">
+    <div className="user_content mx-auto max-w-4xl">
       <div className="mb-8 border-b border-anu-border pb-6">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Course materials</h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">

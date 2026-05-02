@@ -1,69 +1,131 @@
 import Link from 'next/link';
 
-const courses = [
-  {
-    code: 'COMP1100',
-    name: 'Programming as Problem Solving',
-    hint: 'Summaries ready · Last sync demo',
-  },
-  {
-    code: 'STAT1008',
-    name: 'Quantitative Research Methods',
-    hint: '3 lectures indexed · Tutorials linked',
-  },
-  {
-    code: 'MATH1013',
-    name: 'Mathematics and Applications 1',
-    hint: 'Awaiting materials · Connect Canvas to sync',
-  },
-] as const;
-
-export default function DashboardPage() {
+/** Course home — wiki-style body aligned with canvas.anu.edu.au course pages (abbreviated). */
+export default function CourseHomePage() {
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 md:px-6">
-      <div className="mb-8 border-b border-anu-border pb-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">Dashboard</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
-          Your courses and quick progress for the study assistant. Connect the Canvas student API to sync real materials —
-          this screen uses sample data for layout only.
-        </p>
+    <div className="user_content">
+      <div className="mb-6 rounded border border-dashed border-neutral-300 bg-neutral-50 px-4 py-8 text-center text-sm text-neutral-600">
+        Banner image placeholder (course hero loads here in Canvas).
       </div>
 
-      <section className="mb-10 grid grid-cols-3 gap-4 md:gap-6">
-        <div className="rounded-xl border border-anu-border bg-white p-4 shadow-sm md:p-5">
-          <p className="text-3xl font-bold tabular-nums text-slate-900 md:text-4xl">3</p>
-          <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">Courses linked</p>
-        </div>
-        <div className="rounded-xl border border-anu-border bg-white p-4 shadow-sm md:p-5">
-          <p className="text-3xl font-bold tabular-nums text-slate-900 md:text-4xl">12</p>
-          <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">Items indexed</p>
-        </div>
-        <div className="rounded-xl border border-anu-border bg-white p-4 shadow-sm md:p-5">
-          <p className="text-3xl font-bold tabular-nums text-anu-gold md:text-4xl">2</p>
-          <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">Quizzes generated</p>
-        </div>
-      </section>
+      <h2>How to engage with this course</h2>
+      <ul style={{ listStyleType: 'disc' }}>
+        <li>
+          Read your <Link href="#">Class summary</Link> and the <Link href="#">Course contacts</Link>
+        </li>
+        <li>
+          Read <Link href="#">Course Outline</Link>.
+        </li>
+        <li>
+          Get familiar with the information in the <Link href="#">Course information</Link> module
+        </li>
+        <li>Check Announcements and Discussions regularly</li>
+        <li>
+          Engage with course content for each week or topic in the <Link href="#">Modules</Link>
+        </li>
+        <li>
+          Check your <Link href="#">Assessments</Link> regularly
+        </li>
+      </ul>
 
-      <section>
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Courses</h2>
-        <ul className="grid gap-4 md:grid-cols-2">
-          {courses.map((c) => (
-            <li key={c.code}>
-              <Link
-                href="/assistant"
-                className="block rounded-xl border border-anu-border bg-white p-5 shadow-sm transition hover:border-anu-gold/50 hover:shadow-md"
-              >
-                <p className="text-xs font-semibold uppercase tracking-wide text-anu-gold">{c.code}</p>
-                <p className="mt-1 font-semibold text-slate-900">{c.name}</p>
-                <p className="mt-2 text-sm text-slate-600">{c.hint}</p>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <h2>Class summary</h2>
+      <ul>
+        <li>
+          <Link href="https://programsandcourses.anu.edu.au/course/COMP4610" target="_blank" rel="noreferrer">
+            COMP4610
+          </Link>
+        </li>
+        <li>
+          <Link href="https://programsandcourses.anu.edu.au/course/COMP8610" target="_blank" rel="noreferrer">
+            COMP8610
+          </Link>
+        </li>
+      </ul>
 
-      <p className="mt-10 text-xs text-slate-500">
-        Limitation: outputs depend on what is synced from Canvas and may omit unpublished or restricted content.
+      <h2>Course schedule</h2>
+      <p style={{ fontSize: '12pt', color: '#000000', lineHeight: '25px' }}>
+        The following table gives you information and links to what you will be doing each week. Please note: The
+        content of each module might not be available until just before it is due to begin.
+      </p>
+
+      <table style={{ borderCollapse: 'collapse', width: '98%', borderColor: '#be830e' }} border={3}>
+        <caption>Course Schedule</caption>
+        <thead>
+          <tr style={{ textAlign: 'center', height: '28px' }}>
+            <th style={{ width: '15%', height: '28px' }} scope="col">
+              <strong>Week</strong>
+            </th>
+            <th style={{ width: '30%', height: '28px' }} scope="col">
+              <strong>Lecture</strong>
+            </th>
+            <th style={{ width: '26%', height: '28px' }} scope="col">
+              <strong>Activities &amp; Computer Labs</strong>
+            </th>
+            <th style={{ width: '29%', height: '28px' }} scope="col">
+              <strong>Assessment</strong>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style={{ height: '29px' }}>
+            <td style={{ width: '15%', textAlign: 'center', height: '29px' }}>
+              <strong>1</strong>
+            </td>
+            <td>Course overview, math review, spatial transformation</td>
+            <td />
+            <td />
+          </tr>
+          <tr style={{ height: '29px' }}>
+            <td style={{ textAlign: 'center', height: '29px' }}>
+              <strong>2</strong>
+            </td>
+            <td>Rasterisation I</td>
+            <td>C-Lab-1 workshop; C-Lab-1 session A</td>
+            <td />
+          </tr>
+          <tr style={{ height: '29px' }}>
+            <td style={{ textAlign: 'center', height: '29px' }}>
+              <strong>3</strong>
+            </td>
+            <td>Rasterisation II</td>
+            <td>C-Lab-1 session B</td>
+            <td />
+          </tr>
+          <tr style={{ height: '29px' }}>
+            <td style={{ textAlign: 'center', height: '29px' }}>
+              <strong>4</strong>
+            </td>
+            <td>Rasterisation III</td>
+            <td>C-Lab-2 workshop; C-Lab-2 session A</td>
+            <td>C-Lab-1 report due</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Smart study assistant</h2>
+      <p>
+        Open the integrated tool from the course menu: <Link href="/assistant">Study Assistant</Link> — summaries,
+        Q&amp;A, <Link href="/materials">readings index</Link>, and <Link href="/quizzes">practice quizzes</Link> when
+        your materials are synced.
+      </p>
+
+      <h2>Academic integrity</h2>
+      <p style={{ textDecoration: 'underline', fontSize: '12pt' }}>
+        <Link
+          href="https://www.anu.edu.au/students/academic-skills/referencing-and-academic-integrity/academic-integrity-best-practice"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Click here to read about academic integrity best practice
+        </Link>
+      </p>
+
+      <p>
+        ANU provides{' '}
+        <Link href="https://www.anu.edu.au/students/health-safety-wellbeing" target="_blank" rel="noreferrer">
+          Health, Safety and Wellbeing services
+        </Link>{' '}
+        free of charge to students.
       </p>
     </div>
   );

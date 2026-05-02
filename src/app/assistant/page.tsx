@@ -61,7 +61,7 @@ export default function AssistantPage() {
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-3.5rem)] max-w-7xl flex-col gap-0 px-4 py-6 md:flex-row md:px-6">
+    <div className="assistant-tool flex min-h-0 flex-1 flex-col gap-4 p-4 md:flex-row md:gap-4">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col rounded-xl border border-anu-border bg-white shadow-sm">
         <div className="border-b border-anu-border px-4 py-3 md:px-5">
           <h1 className="text-lg font-semibold text-slate-900">Study Assistant</h1>

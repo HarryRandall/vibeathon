@@ -21,7 +21,7 @@ export default function QuizzesPage() {
   const wrong = submitted && selected !== null && selected !== sampleQuestion.correctIndex;
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 md:px-6">
+    <div className="user_content mx-auto max-w-3xl">
       <div className="mb-8 border-b border-anu-border pb-6">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Practice quizzes</h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
